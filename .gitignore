@@ -1,0 +1,9 @@
+node_modules
+dist
+.env
+*.log
+agent/snbd-agent
+agent/dist
+.DS_Store
+agent/.snbd
+backups

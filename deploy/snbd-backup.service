@@ -1,0 +1,9 @@
+[Unit]
+Description=SNBD Console database backup
+
+[Service]
+Type=oneshot
+User=snbd
+EnvironmentFile=/etc/snbd-console.env
+Environment=BACKUP_DIR=/var/backups/snbd
+ExecStart=/opt/snbd/scripts/backup-db.sh

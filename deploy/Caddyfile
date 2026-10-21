@@ -1,0 +1,14 @@
+# Replace panel.example.com. Caddy gets and renews the TLS certificate by itself; ports 80 and 443 must be open.
+panel.example.com {
+	encode zstd gzip
+
+	# file uploads go through the panel (limit is also enforced by the app at 200 MB)
+	request_body {
+		max_size 210MB
+	}
+
+	reverse_proxy 127.0.0.1:3101 {
+		# live terminal, agent and install-log connections
+		flush_interval -1
+	}
+}

@@ -1,0 +1,13 @@
+import type { ReactNode } from 'react';
+
+const base = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true } as const;
+const icon = (d: ReactNode) => () => <svg {...base}>{d}</svg>;
+
+export const IconServers = icon(<><rect x="3" y="4" width="18" height="6" rx="1.5" /><rect x="3" y="14" width="18" height="6" rx="1.5" /><path d="M7 7h.01M7 17h.01" /></>);
+export const IconKey = icon(<><circle cx="8" cy="12" r="3.5" /><path d="M11.5 12H21M18 12v3" /></>);
+export const IconBackup = icon(<><rect x="3" y="4" width="18" height="5" rx="1" /><path d="M5 9v10h14V9M10 13h4" /></>);
+export const IconActivity = icon(<path d="M3 12h4l3-8 4 16 3-8h4" />);
+export const IconReceipt = icon(<><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" /><path d="M9 8h6M9 12h6" /></>);
+export const IconSupport = icon(<><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3.5" /></>);
+export const IconCopy = icon(<><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></>);
+export const IconArrowUpRight = icon(<path d="M7 17L17 7M9 7h8v8" />);

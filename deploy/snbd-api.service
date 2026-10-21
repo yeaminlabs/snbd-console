@@ -1,0 +1,22 @@
+[Unit]
+Description=SNBD Console API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+User=snbd
+WorkingDirectory=/opt/snbd/apps/api
+EnvironmentFile=/etc/snbd-console.env
+ExecStart=/usr/bin/env pnpm start
+Restart=always
+RestartSec=3
+# the process only needs to read its own files and talk to the network
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/snbd/dist
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

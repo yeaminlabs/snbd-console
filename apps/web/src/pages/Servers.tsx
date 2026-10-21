@@ -1,0 +1,156 @@
+import { useEffect, useState, type FormEvent } from 'react';
+import { api, type ActivityItem, type ImportResult, type Server } from '../api';
+import { IconCopy } from '../components/Icons';
+import { planLabel, sourceLabel, statusOf, ago } from '../format';
+
+const activityLabel: Record<string, string> = {
+  'server.import': 'Server added',
+  'agent.connected': 'Agent connected',
+  'terminal.open': 'Terminal opened',
+};
+
+function ConnectCard({ onCreated }: { onCreated: () => void }) {
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      setResult(await api.importServer(name.trim()));
+      setName('');
+      onCreated();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const command = result ? `curl -fsSL ${result.panelUrl || location.origin}/enroll/${result.token} | sh` : '';
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(command);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard blocked: the command stays selectable */ }
+  }
+
+  return (
+    <section className="card pad" id="connect" aria-labelledby="connect-h">
+      <h2 id="connect-h" className="card-title">Connect an existing VPS</h2>
+      <p className="muted" style={{ margin: '8px 0 12px' }}>Run this once as root on any Linux server to link it to your panel.</p>
+      {result ? (
+        <>
+          <div className="codebox mono" tabIndex={0}>{command}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
+            <button className="btn" onClick={copy}><IconCopy />{copied ? 'Copied' : 'Copy'}</button>
+            <span className="muted" style={{ fontSize: 12 }}>One-time token, expires in {result.expiresInMinutes} minutes.</span>
+          </div>
+          <button className="btn-link" onClick={() => setResult(null)}>Add another</button>
+        </>
+      ) : (
+        <form onSubmit={submit}>
+          <div className="field" style={{ marginBottom: 12 }}>
+            <label htmlFor="srv-name">Server name</label>
+            <input id="srv-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. legacy-site" maxLength={60} required />
+          </div>
+          {error && <p className="error" role="alert">{error}</p>}
+          <button className="btn p" disabled={busy || !name.trim()}>{busy ? 'Creating…' : 'Generate command'}</button>
+        </form>
+      )}
+    </section>
+  );
+}
+
+export function Servers() {
+  const [servers, setServers] = useState<Server[] | null>(null);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [error, setError] = useState('');
+
+  const load = () => {
+    api.servers().then(setServers).catch((e) => setError(e.message));
+    api.activity().then(setActivity).catch(() => {});
+  };
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  const count = (st: Server['status']) => servers?.filter((s) => s.status === st && !s.suspended_at).length ?? 0;
+  const vcpu = servers?.reduce((n, s) => n + (s.plan.vcpu ?? 0), 0) ?? 0;
+  const ram = servers?.reduce((n, s) => n + (s.plan.ramGb ?? 0), 0) ?? 0;
+  const sources = new Set(servers?.map((s) => sourceLabel(s)[0].split(' · ')[0]));
+
+  return (
+    <>
+      <div className="head-row" style={{ alignItems: 'flex-end' }}>
+        <div>
+          <h1>Servers</h1>
+          <div className="muted" style={{ marginTop: 4 }}>
+            {servers ? `${servers.length} ${servers.length === 1 ? 'server' : 'servers'}${sources.size ? ' across ' + [...sources].join(' and ') : ''}` : 'Loading…'}
+          </div>
+        </div>
+        <a className="btn" href="#connect" onClick={(e) => { e.preventDefault(); document.getElementById('srv-name')?.focus(); document.getElementById('connect')?.scrollIntoView({ behavior: 'smooth' }); }}>Connect existing VPS</a>
+      </div>
+      {error && <p className="error">{error}</p>}
+
+      <div className="stats">
+        <div className="card pad"><div className="th">Running</div><div className="stat">{count('running')}</div></div>
+        <div className="card pad"><div className="th">Provisioning</div><div className="stat">{count('provisioning')}</div></div>
+        <div className="card pad"><div className="th">Agent offline</div><div className="stat">{count('agent_offline')}</div></div>
+        <div className="card pad"><div className="th">Total vCPU / RAM</div><div className="stat">{vcpu} <span className="muted" style={{ fontSize: 16 }}>/ {ram} GB</span></div></div>
+      </div>
+
+      <div className="cols">
+        <div className="card grow-lg" style={{ overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <div style={{ minWidth: 860 }}>
+              <div className="srow th" style={{ borderTop: 0 }}><div>Server</div><div>Source</div><div>Plan</div><div>System</div><div>Status</div><div>CPU</div></div>
+              {servers?.map((s) => {
+                const [label, cls] = statusOf(s);
+                const [src, srcCls] = sourceLabel(s);
+                const cpu = Math.round(s.cpu ?? 0);
+                return (
+                  <div className="srow" key={s.id}>
+                    <div>
+                      <a href={`#/servers/${s.id}`} style={{ fontWeight: 600, color: 'var(--ink)', textDecoration: 'none' }}>{s.name}</a>
+                      <div className="mono muted" style={{ fontSize: 12 }}>{s.ip ?? 'no IP yet'}</div>
+                    </div>
+                    <div><span className={`badge ${srcCls}`}>{src}</span></div>
+                    <div className="muted">{planLabel(s.plan)}</div>
+                    <div className="muted">{s.os ?? '—'}</div>
+                    <div><span className={`badge ${cls}`}>{label}</span></div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div className="bar"><div style={{ width: `${cpu}%` }} /></div>
+                      <span className="muted" style={{ fontSize: 12, width: 32 }}>{s.cpu == null ? '—' : `${cpu}%`}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          {servers?.length === 0 && <p className="muted" style={{ padding: 20, margin: 0 }}>No servers yet. Connect an existing VPS to get started.</p>}
+        </div>
+        <div className="side-col">
+          <ConnectCard onCreated={load} />
+          <section className="card pad" aria-labelledby="act-h">
+            <h2 id="act-h" className="card-title" style={{ marginBottom: 12 }}>Recent activity</h2>
+            {activity.length === 0 && <p className="muted" style={{ margin: 0 }}>Nothing yet.</p>}
+            {activity.map((a) => (
+              <div key={a.id} style={{ padding: '10px 0', borderTop: '1px solid #f4f4f5' }}>
+                <div style={{ fontWeight: 500 }}>{activityLabel[a.action] ?? a.action}</div>
+                <div className="muted" style={{ fontSize: 12 }}>{a.server} · {ago(a.at)}</div>
+              </div>
+            ))}
+          </section>
+        </div>
+      </div>
+    </>
+  );
+}
