@@ -49,6 +49,8 @@ const hostOf = (v: string) => { try { return new URL(v).host; } catch { return '
 export async function registerHardening(app: FastifyInstance) {
   // cheap CSRF defence on top of SameSite cookies: a browser request that names a foreign Origin is refused
   const allowedHosts = new Set([process.env.PUBLIC_PANEL_URL, process.env.WEB_URL].filter(Boolean).map((u) => hostOf(u!)));
+  // local development: the Vite dev server (a different port) is the browser's origin
+  if (!isProd) allowedHosts.add('localhost:5173');
   app.addHook('onRequest', async (req, reply) => {
     if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return;
     const origin = req.headers.origin;
