@@ -75,4 +75,5 @@ export const api = {
   oauthApprove: (id: string, serverIds: string[] | null) => post(`/api/oauth/request/${id}/approve`, { serverIds }).then(json<{ redirect: string }>),
   oauthDeny: (id: string) => post(`/api/oauth/request/${id}/deny`, {}).then(json<{ redirect: string }>),
   importServer: (name: string) => post('/api/servers/import', { name }).then(json<ImportResult>),
+  aiSession: (serverId: string) => post(`/api/servers/${serverId}/ai-session`, {}).then(json<{ token: string }>),
 };

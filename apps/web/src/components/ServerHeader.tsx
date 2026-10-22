@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { api, type Server } from '../api';
 import { sourceLabel, statusOf } from '../format';
 
-type Tab = 'overview' | 'terminal' | 'files' | 'apps' | 'reinstall';
+type Tab = 'overview' | 'terminal' | 'files' | 'apps' | 'reinstall' | 'ai';
 
 function PowerMenu({ server, onChanged }: { server: Server; onChanged?: () => void }) {
   const [busy, setBusy] = useState('');
@@ -44,6 +44,7 @@ export function ServerHeader({ server, tab, onChanged }: { server: Server | null
     ['terminal', 'Terminal', `#/servers/${id}/terminal`],
     ['files', 'Files', `#/servers/${id}/files`],
     ['apps', 'Apps', `#/servers/${id}/apps`],
+    ['ai', 'AI Assistant', `#/servers/${id}/ai`],
     ['reinstall', 'Reinstall', `#/servers/${id}/reinstall`],
   ];
   return (

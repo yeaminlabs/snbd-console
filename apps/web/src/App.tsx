@@ -9,6 +9,7 @@ import { Apps } from './pages/Apps';
 import { Activity } from './pages/Activity';
 import { Agents } from './pages/Agents';
 import { Authorize } from './pages/Authorize';
+import { AiPage } from './pages/AiPage';
 import { Shell } from './components/Shell';
 import { TerminalPage } from './pages/TerminalPage';
 
@@ -37,10 +38,10 @@ export function App() {
   if (route === '/authorize') return <Authorize id={new URLSearchParams(query).get('req') ?? ''} />;
   if (route === '/agents') return <Shell me={me} onSignedOut={() => setMe(null)} active="agents"><Agents /></Shell>;
   if (route === '/activity') return <Shell me={me} onSignedOut={() => setMe(null)} active="activity"><Activity /></Shell>;
-  const match = route.match(/^\/servers\/([0-9a-f-]{36})(\/terminal|\/reinstall|\/files|\/apps)?$/);
+  const match = route.match(/^\/servers\/([0-9a-f-]{36})(\/terminal|\/reinstall|\/files|\/apps|\/ai)?$/);
   return (
     <Shell me={me} onSignedOut={() => setMe(null)}>
-      {match ? (match[2] === '/terminal' ? <TerminalPage serverId={match[1]} /> : match[2] === '/reinstall' ? <Reinstall serverId={match[1]} /> : match[2] === '/files' ? <Files serverId={match[1]} path={new URLSearchParams(query).get('p') || '/'} /> : match[2] === '/apps' ? <Apps serverId={match[1]} /> : <Overview serverId={match[1]} />) : <Servers />}
+      {match ? (match[2] === '/terminal' ? <TerminalPage serverId={match[1]} /> : match[2] === '/reinstall' ? <Reinstall serverId={match[1]} /> : match[2] === '/files' ? <Files serverId={match[1]} path={new URLSearchParams(query).get('p') || '/'} /> : match[2] === '/apps' ? <Apps serverId={match[1]} /> : match[2] === '/ai' ? <AiPage serverId={match[1]} /> : <Overview serverId={match[1]} />) : <Servers />}
     </Shell>
   );
 }

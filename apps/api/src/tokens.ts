@@ -102,6 +102,26 @@ export function registerTokens(app: FastifyInstance) {
     return { id: rows[0].id, token, expiresAt: rows[0].expiresAt }; // the only time the token is shown
   });
 
+  /** Creates a short-lived deploy-scoped token for the AI chat session, restricted to one server. */
+  app.post<{ Params: { id: string } }>('/api/servers/:id/ai-session', async (req, reply) => {
+    const client = await clientFromRequest(req);
+    if (!client) return reply.code(401).send({ error: 'Not signed in' });
+    if (!z.string().uuid().safeParse(req.params.id).success) return reply.code(404).send({ error: 'Not found' });
+    const { rows: serverRows } = await pool.query(
+      'select id from servers where id = $1 and client_id = $2 and terminated_at is null',
+      [req.params.id, client.id],
+    );
+    if (serverRows.length === 0) return reply.code(404).send({ error: 'Server not found' });
+    const token = TOKEN_PREFIX + randomBytes(32).toString('base64url');
+    await pool.query(
+      `insert into api_tokens (client_id, name, token_hash, token_prefix, scope, server_ids, expires_at)
+       values ($1, 'AI session', $2, $3, 'deploy', $4::uuid[], now() + interval '24 hours')`,
+      [client.id, sha256(token), token.slice(0, 12), [req.params.id]],
+    );
+    reply.header('cache-control', 'no-store');
+    return { token };
+  });
+
   app.delete<{ Params: { id: string } }>('/api/tokens/:id', async (req, reply) => {
     const client = await clientFromRequest(req);
     if (!client) return reply.code(401).send({ error: 'Not signed in' });
