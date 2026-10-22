@@ -7,7 +7,7 @@ const dir = join(import.meta.dirname, '..', 'migrations');
 await pool.query('create table if not exists schema_migrations (name text primary key, applied_at timestamptz not null default now())');
 const done = new Set((await pool.query('select name from schema_migrations')).rows.map((r) => r.name));
 
-for (const file of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {
+for (const file of readdirSync(dir).filter((f) => /^\d+_.+\.sql$/.test(f)).sort()) {
   if (done.has(file)) continue;
   const client = await pool.connect();
   try {

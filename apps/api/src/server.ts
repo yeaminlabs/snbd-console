@@ -25,8 +25,14 @@ import { failPending, failRunningJobs, onJobDone, onJobLog, onRpcResult } from '
 const HEARTBEAT_STORE_EVERY_MS = 60_000;
 
 assertProductionConfig();
+// TRUST_PROXY: 'true' trusts every hop (only safe if the proxy overwrites X-Forwarded-For, like Caddy), or an address
+// such as 127.0.0.1 to trust only that proxy, which is right for nginx because it appends to the header
+function trustProxySetting(): boolean | string {
+  const v = process.env.TRUST_PROXY;
+  return !v || v === 'false' ? false : v === 'true' ? true : v;
+}
 const webDist = join(import.meta.dirname, '..', '..', 'web', 'dist');
-const app = Fastify({ logger: { level: 'info' }, trustProxy: process.env.TRUST_PROXY === 'true' });
+const app = Fastify({ logger: { level: 'info' }, trustProxy: trustProxySetting() });
 await app.register(cookie);
 await registerHardening(app);
 await app.register(websocket, { options: { maxPayload: 4 * 1024 * 1024 } });

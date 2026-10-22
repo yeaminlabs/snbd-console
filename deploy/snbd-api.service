@@ -7,7 +7,8 @@ Wants=network-online.target
 User=snbd
 WorkingDirectory=/opt/snbd/apps/api
 EnvironmentFile=/etc/snbd-console.env
-ExecStart=/usr/bin/env pnpm start
+# run tsx directly: pnpm would try to write into its home directory, which this sandbox keeps read-only
+ExecStart=/opt/snbd/apps/api/node_modules/.bin/tsx src/server.ts
 Restart=always
 RestartSec=3
 # the process only needs to read its own files and talk to the network

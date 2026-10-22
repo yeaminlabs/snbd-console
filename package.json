@@ -13,6 +13,7 @@
     "build": "pnpm --filter @snbd/web build",
     "start": "pnpm --filter @snbd/api start",
     "backup": "./scripts/backup-db.sh",
-    "rotate-keys": "psql \"$DATABASE_URL\" -c \"update agent_keys set key_set_at = now() - interval '1 year'\""
+    "rotate-keys": "psql \"$DATABASE_URL\" -c \"update agent_keys set key_set_at = now() - interval '1 year'\"",
+    "create-client": "pnpm --filter @snbd/api create-client"
   }
 }
