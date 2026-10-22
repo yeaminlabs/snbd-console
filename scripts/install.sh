@@ -20,6 +20,8 @@ die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 [ "$(id -u)" = 0 ] || die "run as root (try: sudo sh)"
 [ "$(uname -s)" = Linux ] || die "Linux only"
 
+# a token written into this script means "enroll this server now" (the command from the panel)
+EXPLICIT_TOKEN="$ENROLL_TOKEN"
 # first-boot (cloud-init) writes the token to agent.env before running this script
 if [ -z "$ENROLL_TOKEN" ] && [ -f "$ENV_FILE" ]; then
   ENROLL_TOKEN=$(sed -n 's/^ENROLL_TOKEN=//p' "$ENV_FILE" | head -n1)
@@ -80,6 +82,14 @@ want=$(grep " $NAME\$" "$TMP/SHA256SUMS" | cut -d' ' -f1)
 install -d -m 0700 "$CONF_DIR"
 install -m 0755 "$TMP/$NAME" "$BIN"
 
+# An enroll command must never silently reuse an older enrollment: that key may belong to a different panel
+# (a test panel, an earlier install) and would be rejected. Keep it aside and enroll fresh.
+if [ -n "$EXPLICIT_TOKEN" ] && [ -f "$CONF_DIR/agent.json" ]; then
+  OLD="$CONF_DIR/agent.json.old-$(date +%Y%m%d%H%M%S)"
+  mv "$CONF_DIR/agent.json" "$OLD"
+  say "Found an older enrollment on this server; kept as $OLD and enrolling again."
+fi
+
 # agent.env: keep the token only when this server is not enrolled yet
 WS_URL=$(printf '%s' "$PANEL_URL" | sed 's#^http#ws#')/agent
 {
@@ -116,15 +126,25 @@ WantedBy=multi-user.target
 UNIT
 systemctl daemon-reload
 systemctl enable snbd-agent >/dev/null 2>&1
+START=$(date '+%Y-%m-%d %H:%M:%S')
 systemctl restart snbd-agent
 
-if [ ! -f "$CONF_DIR/agent.json" ] || [ -n "$ENROLL_TOKEN" ]; then
-  say "Waiting for the server to connect to the panel..."
+say "Waiting for the server to connect to the panel..."
+if command -v journalctl >/dev/null 2>&1; then
   i=0
-  while [ $i -lt 30 ]; do
-    [ -f "$CONF_DIR/agent.json" ] && { say "Done. This server is now connected to your panel."; exit 0; }
+  while [ $i -lt 40 ]; do
+    LOG=$(journalctl -u snbd-agent --since "$START" --no-pager 2>/dev/null || true)
+    case "$LOG" in *"connected to panel"*) say "Done. This server is connected to your panel."; exit 0 ;; esac
+    case "$LOG" in *"Invalid, used or expired"*) die "the panel rejected the enroll token (already used or expired). Generate a new command in the panel and run it again." ;; esac
+    case "$LOG" in *"Bad credentials"*|*"rejected stored key"*) die "the panel rejected this server's saved key. Generate a new command in the panel and run it again." ;; esac
     i=$((i + 1)); sleep 1
   done
-  die "agent did not enroll in 30s. Check: journalctl -u snbd-agent -n 50"
+  die "the agent did not connect within 40 seconds. Check: journalctl -u snbd-agent -n 50"
 fi
-say "Agent updated and running."
+# no journal to read: all we can confirm is that enrollment finished
+i=0
+while [ $i -lt 30 ]; do
+  [ -f "$CONF_DIR/agent.json" ] && { say "Enrolled (cannot verify the live connection without journalctl; check the panel)."; exit 0; }
+  i=$((i + 1)); sleep 1
+done
+die "the agent did not enroll in 30 seconds"

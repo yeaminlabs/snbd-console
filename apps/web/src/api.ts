@@ -30,7 +30,9 @@ export interface OsImage { image: string; name: string; ver: string }
 export interface FileEntry { name: string; type: 'dir' | 'file' | 'other'; link?: boolean; size: number; mode: string; mtime: number }
 export interface AppInfo { id: string; name: string; tag: string; desc: string; installed: boolean | null }
 export interface JobState { status: 'queued' | 'running' | 'done' | 'failed'; app: string; offset: number; log: string; pct: number; step: string }
-export interface AuditItem { id: number; action: string; at: string; meta: Record<string, any>; system: boolean; serverId: string; server: string }
+export interface AuditItem { id: number; action: string; at: string; meta: Record<string, any>; system: boolean; via: string | null; serverId: string; server: string }
+export interface OAuthRequestInfo { clientName: string; returnsTo: string; servers: { id: string; name: string }[]; access: string }
+export interface TokenInfo { kind: 'token' | 'connector'; id: string; name: string; prefix: string; scope: 'read' | 'deploy'; serverIds: string[] | null; serverNames: string[]; expiresAt: string | null; lastUsedAt: string | null; createdAt: string }
 export interface ActivityItem { id: number; action: string; at: string; server: string }
 export interface ImportResult { serverId: string; token: string; expiresInMinutes: number; panelUrl: string }
 
@@ -66,5 +68,11 @@ export const api = {
   cancelJob: (id: string, jobId: string) => post(`/api/servers/${id}/jobs/${jobId}/cancel`, {}).then(json<{ ok: true }>),
   resetPassword: (id: string) => post(`/api/servers/${id}/password-reset`, {}).then(json<{ user: string; password: string }>),
   audit: (server: string, before: number | null) => fetch(`/api/audit?limit=50${server ? `&server=${server}` : ''}${before ? `&before=${before}` : ''}`).then(json<{ items: AuditItem[]; next: number | null }>),
+  tokens: () => fetch('/api/tokens').then(json<TokenInfo[]>),
+  createToken: (name: string, serverIds: string[] | null, expiresInDays: number | null) => post('/api/tokens', { name, serverIds, expiresInDays }).then(json<{ id: string; token: string; expiresAt: string | null }>),
+  revokeToken: (id: string) => fetch(`/api/tokens/${id}`, { method: 'DELETE' }).then(json<{ ok: true }>),
+  oauthRequest: (id: string) => fetch(`/api/oauth/request/${id}`).then(json<OAuthRequestInfo>),
+  oauthApprove: (id: string, serverIds: string[] | null) => post(`/api/oauth/request/${id}/approve`, { serverIds }).then(json<{ redirect: string }>),
+  oauthDeny: (id: string) => post(`/api/oauth/request/${id}/deny`, {}).then(json<{ redirect: string }>),
   importServer: (name: string) => post('/api/servers/import', { name }).then(json<ImportResult>),
 };

@@ -146,3 +146,7 @@ a[aria-disabled='true'] { pointer-events: none; opacity: .5; }
 .ar { display: grid; grid-template-columns: 150px 1.2fr 3fr 80px; gap: 16px; align-items: center; padding: 12px 20px; border-top: 1px solid #f4f4f5; min-height: 44px; }
 .select { height: 44px; padding: 0 12px; border-radius: 6px; border: 1px solid #a1a1aa; font: inherit; background: #fff; }
 .select:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+
+/* ai agents */
+.fieldset { border: 0; padding: 0; margin: 0; }
+.fieldset legend { font-weight: 600; padding: 0; margin-bottom: 4px; }

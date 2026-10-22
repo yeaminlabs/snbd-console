@@ -1,99 +1,238 @@
 # SNBD Console
 
-VPS panel: a Go agent inside each VPS dials out to this Node API; browsers get a terminal (files, apps, reinstall come next).
-Design: https://claude.ai/artifact/6HKa7dAa78BET1bewmAyTu. Build plan phases 0-7 are done.
+A self-hosted VPS management panel for SNBD Host. Customers can connect existing Linux servers, open a browser terminal, manage files, install applications, and monitor their servers. Hetzner Cloud provisioning and a WHMCS module connect the panel to a hosting business's ordering and billing workflow.
 
-## Run locally
-Needs Node, pnpm, Go, Postgres (`createdb snbd_console`).
+The project contains a React frontend, a TypeScript API backed by PostgreSQL, and a Go agent that runs on each managed VPS. It also exposes read-only server tools to AI assistants through the Model Context Protocol (MCP).
+
+## Features
+
+- **Server overview:** connection status, CPU, memory, disk usage, uptime, and activity history.
+- **Browser terminal:** interactive PTY sessions over WebSockets, including terminal resizing.
+- **File manager:** browse, edit text files, upload/download, create folders, rename, and delete. Text edits support files up to 2 MB; uploads support files up to 200 MB.
+- **Application installer:** recipes for Claude Code, Hermes Agent, OpenClaw, Docker, Node.js 22, n8n, and Ollama, with progress, logs, and cancellation.
+- **Server management:** connect an existing VPS, reset its root password, and use provider-supported power and OS reinstall controls.
+- **Hetzner Cloud:** provision, suspend/unsuspend, resize, rebuild, and delete servers through the provider adapter.
+- **WHMCS integration:** signed, idempotent lifecycle webhooks and single-use customer SSO links.
+- **AI connectors:** scoped personal API tokens and OAuth authorization for read-only MCP tools.
+- **Operations:** signed agent releases, agent key rotation, offline/recovery alerts, audit logs, retention cleanup, and database backup/restore scripts.
+
+**Current limits:** BDIX is a placeholder adapter and does not provision VMs. Hetzner also falls back to that stub when no API token is configured. MCP currently exposes read-only tools; deployment and other write tools are not implemented. CloudPanel is a deployment option for the panel, not an included application recipe. Use the [staging checklist](docs/STAGING.md) to validate real provider operations and app installations before serving customers.
+
+## Architecture
+
+```text
+Browser ── HTTPS / WebSocket ──> SNBD API ──> PostgreSQL
+                                    │
+Linux VPS agent ── outbound WSS ─────┤
+                                    ├──> Hetzner Cloud API
+WHMCS ── signed webhook / SSO ───────┤
+AI assistant ── MCP + token/OAuth ───┘
+```
+
+Agents connect out to the panel at `/agent`; the panel does not need an inbound agent port on each VPS. Terminal sessions, file operations, metrics, and application jobs share this connection. The production API serves the built frontend as well as the API routes.
+
+## Requirements
+
+- **Node.js 22** with a current patch release (the deployment images use Node 22).
+- **pnpm 11.15.1**, matching the Docker build.
+- **PostgreSQL 16**, matching the Compose configuration, plus PostgreSQL client tools for local setup and backups.
+- **Go 1.26 or newer** to build or run the agent, as declared in `agent/go.mod`.
+- Managed VPSs: **Linux amd64 or arm64**; the installer expects root access and systemd. OpenSSL 3+ enables agent release signature verification.
+- Optional: Docker for container deployment and provider/tools integration checks; a Hetzner Cloud project token for real provisioning; WHMCS for billing integration.
+
+The agent executes terminal commands, file operations, and application recipes with the permissions of its operating-system user. A root-installed agent therefore manages the VPS as root. Use a disposable Linux VM for development involving these operations.
+
+## Local development
+
+### 1. Install dependencies and configure the database
 
 ```bash
-pnpm install
-cp .env.example .env        # DATABASE_URL, PORT=3101
+git clone https://github.com/yeaminlabs/snbd-console.git
+cd snbd-console
+pnpm install --frozen-lockfile
+cp .env.example .env
+createdb snbd_console
+```
+
+Ensure PostgreSQL is running and edit `.env` to match your local database credentials. The supplied development settings use:
+
+```dotenv
+DATABASE_URL=postgres://localhost:5432/snbd_console
+PORT=3101
+PUBLIC_PANEL_URL=http://localhost:3101
+```
+
+Use port `3101` for the following instructions: it matches Vite's proxy and the integration scripts. Without a `PORT` setting, the API itself defaults to `3000`.
+
+```bash
 pnpm migrate
-pnpm seed                   # prints login + one-time agent token (30 min, single use)
-pnpm dev:api                # http://localhost:3101
-pnpm dev:web                # http://localhost:5173
-cd agent && PANEL_URL=ws://localhost:3101/agent SNBD_STATE_DIR=./.snbd ENROLL_TOKEN=<token> go run .
+pnpm seed
 ```
-Sign in with the seeded login, open the server, click Open terminal.
-After the first enroll the agent stores its key in `SNBD_STATE_DIR` and reconnects without the token.
 
-`pnpm --filter @snbd/api exec tsx --env-file=../../.env src/smoke.ts <serverId>` runs a headless terminal check.
+The seed creates a development customer (`demo@snbd.test` / `demo-password`), a `dev-box` server record, and a single-use enrollment token valid for 30 minutes. It prints the server ID and token. `SEED_EMAIL` and `SEED_PASSWORD` override the demo credentials when creating a customer; reseeding an existing email does not reset its password. Use demo credentials only for local development.
 
-## Agent releases and install
+### 2. Start the API and frontend
+
+Run each command in a separate terminal at the repository root:
+
 ```bash
-node scripts/release.mjs keygen   # once; private key goes to ~/.snbd/release-ed25519.pem (back it up, never commit)
-./scripts/build-agent.sh          # builds linux amd64+arm64, writes SHA256SUMS, signs it, into dist/releases/
+pnpm dev:api
 ```
-The panel serves `dist/releases` under `/dl/`, plus:
-- `GET /enroll/<token>`: `curl -fsSL <panel>/enroll/<token> | sh` (what "Connect existing VPS" shows)
-- `GET /install.sh`: first-boot script for cloud-init; reads the token from `/etc/snbd/agent.env`
 
-`install.sh` verifies the Ed25519 signature (OpenSSL 3+; older systems get a warning, or a hard fail with
-`SNBD_REQUIRE_SIGNATURE=1`), then the SHA-256, installs `snbd-agent` and a systemd unit, enrolls, and
-removes the spent token from `agent.env`. Plain `http://` panels are refused unless `SNBD_INSECURE=1`.
-Tested on Ubuntu 24.04 (systemd), Debian 12 and AlmaLinux 9 (arm64 containers).
+```bash
+pnpm dev:web
+```
 
-## WHMCS
-Copy `whmcs-module/snbdpanel/` to `<whmcs>/modules/servers/snbdpanel/`. In WHMCS add a Server: hostname = panel host,
-tick Secure, Access Hash = `WHMCS_WEBHOOK_SECRET` from `.env`. Create a product with module "SNBD Panel" and set provider,
-vCPU, RAM, disk, region and OS (a configurable option named `os` overrides the product default).
+Open [http://localhost:5173](http://localhost:5173) and sign in with the seeded account. Vite proxies API, terminal, MCP, and OAuth requests to `http://localhost:3101`. Set `API_URL` when launching `dev:web` if the API uses a different address.
 
-The module calls `POST /webhooks/whmcs` with `X-SNBD-Timestamp`, `X-SNBD-Signature: sha256=<hmac of "<ts>.<body>">` and
-`X-SNBD-Idempotency-Key`. Timestamps more than 5 minutes off are refused; a repeated key replays the first answer.
-Actions: `create` (client + server + 24 h enroll token + cloud-init user-data to the provider adapter), `suspend`,
-`unsuspend`, `changepackage`, `terminate` (revokes the agent key), and `sso` (60-second single-use sign-in link
-for the client-area "Open panel" button).
-Until a real provider adapter exists (phase 5) a stub records the user-data under `dist/dev-userdata/` and creates no VM.
+### 3. Connect a development agent
 
-`pnpm --filter @snbd/api exec tsx --env-file=../../.env src/webhook-smoke.ts` runs 22 webhook checks against a running API.
+In another terminal, substitute the token printed by `pnpm seed`:
 
-## Providers, power and reinstall
-`apps/api/src/providers/` holds the adapter interface. **Hetzner** (`hetzner.ts`) creates, powers, resizes, reinstalls and
-deletes servers; it is used when `HETZNER_API_TOKEN` is set. A retried create reuses the VM labelled `snbd_server_id=<id>`
-instead of making a second one. **BDIX** is a stub: it creates nothing and the API answers 501 for power and reinstall.
-WHMCS products for Hetzner need the "Hetzner server type" option (e.g. `cx22`).
+```bash
+cd agent
+PANEL_URL=ws://localhost:3101/agent \
+  SNBD_STATE_DIR=./.snbd \
+  ENROLL_TOKEN='<enrollment-token>' \
+  go run .
+```
 
-- `POST /api/servers/:id/power` `{action: start|stop|reboot}`; stop = graceful shutdown.
-- `POST /api/servers/:id/reinstall` `{os, acknowledged: true}`: sends a fresh enroll token inside user-data with the rebuild,
-  then revokes the old agent key. The Hetzner root password is returned once to the browser and never stored.
-- Resize = power off, `change_type` (disk kept), power on.
+This connects the machine running the command as `dev-box`. When running the agent on a separate Linux VM, replace `localhost` with an API address reachable from that VM. Enrollment stores the agent key in `SNBD_STATE_DIR`; subsequent connections reuse that key without another token. The panel's **Connect existing VPS** flow creates additional server records and installer commands.
 
-Before using a real project run `HETZNER_API_TOKEN=... pnpm hetzner:check cx22` to confirm the OS images in
-`apps/api/src/os.ts` and your server types exist. To try everything without Hetzner: `pnpm mock:hetzner`, then start the API with
-`HETZNER_API_TOKEN=test-token HETZNER_API_URL=http://localhost:4010/v1`, and run `src/provider-smoke.ts`
-(needs Docker; boots a container from the user-data to prove the VM re-enrolls itself after a reinstall).
+## Configuration
 
-## Files, apps and password reset (agent 0.3.0)
-The panel talks to the agent over the same outbound socket with request/response calls (`rpc`) and background jobs.
-- **Files**: list, edit (text, up to 2 MB, saved atomically with permissions kept), upload (up to 200 MB, in 1 MB parts),
-  download, new folder, rename, delete. Deleting top-level system folders is refused. Every write, upload, download and delete is audited.
-- **Apps**: recipes live in `scripts/apps/` (`_lib.sh` helpers + one script per app) and are sent to the agent as a job. Recipes print
-  `##STEP i/N text` lines, which drive the progress bar. One job per server at a time; cancel sends SIGTERM, then SIGKILL after 10 s.
-  If the agent drops, its job is marked failed. Included: Claude Code, Hermes Agent, OpenClaw, Docker, Node.js 22, n8n, Ollama.
-  CloudPanel is not included yet. To add an app: write `scripts/apps/<id>.sh` and add it to `apps/api/src/apps.ts`.
-- **Password reset**: the panel generates a 20-character password, the agent sets it with `chpasswd` (stdin), the browser shows it once.
-  It is never stored or logged.
-- Run `src/tools-smoke.ts` (needs Docker and `snbd-vm-base`, built by `provider-smoke.ts`) for 48 end-to-end checks.
+Local API development, migration, seed, and client-creation commands read the root `.env`. Production `pnpm start` expects configuration to be supplied through the process environment; it does not load `.env` automatically. The systemd unit uses `/etc/snbd-console.env`, and Compose supplies environment variables explicitly.
 
-## Production (phase 7)
-Files in `deploy/`: `Caddyfile` (automatic HTTPS), `snbd-api.service`, `snbd-backup.service` + `.timer`, `env.production.example`.
-1. `pnpm install && pnpm build` (the API then serves the built web app itself), `./scripts/build-agent.sh`.
-2. Copy `deploy/env.production.example` to `/etc/snbd-console.env` (mode 600), fill it in. In production the API refuses to start
-   unless `PUBLIC_PANEL_URL` is https and secrets are long enough. Keep `HOST=127.0.0.1` and `TRUST_PROXY=true` behind Caddy.
-3. Install the unit files, edit the domain in the Caddyfile, start `snbd-api` and Caddy, enable `snbd-backup.timer`.
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | PostgreSQL connection string. Required in production. |
+| `PORT`, `HOST` | API listen address. Defaults: `3000`, `0.0.0.0`. Use `3101` for the documented setup. |
+| `PUBLIC_PANEL_URL` | Address customers and agents use. Must begin with `https://` in production. |
+| `NODE_ENV` | Set to `production` for production validation, secure cookies, and serving the built frontend. |
+| `TRUST_PROXY` | Trusted reverse proxy IPs/CIDRs. Match the actual proxy; production examples bind the API to localhost or a private container network. |
+| `WHMCS_WEBHOOK_SECRET` | Shared WHMCS signing secret, at least 32 characters when configured. Leave empty to keep the integration disabled. |
+| `HETZNER_API_TOKEN` | Read/write Hetzner Cloud project token. Required for real Hetzner operations. |
+| `HETZNER_API_URL` | Optional provider URL override, used by the local mock. |
+| `WEB_URL` | Optional frontend address for SSO redirects and allowed browser origins. Defaults to the public panel URL for SSO. |
+| `RELEASES_DIR` | Optional signed agent release directory. Defaults to `dist/releases` at the repository root. |
+| `ALERT_WEBHOOK_URL` | Optional Slack, Mattermost, Discord, or compatible receiver for offline/recovery notifications. |
+| `ALERT_GRACE_SECONDS` | Offline alert delay; defaults to `120`. |
+| `KEY_ROTATE_AFTER_DAYS` | Agent key rotation age; defaults to `30`. |
+| `OAUTH_ALLOWED_REDIRECT_HOSTS`, `OAUTH_ALLOWED_REDIRECT_SCHEMES` | Override OAuth redirect allowlists; see [MCP documentation](docs/MCP.md). |
 
-**Limits and protections**: 5 wrong logins per IP+email lock that pair for 15 min; per-IP caps on login, webhook, enroll, installer
-and agent connections; 600 requests/min per signed-in session. Browser POSTs naming a foreign `Origin` are refused. Security headers
-and a CSP are sent. Agents with 10 failed attempts from one IP are blocked for 10 min.
-**Cleanup** (hourly): expired enroll/SSO tokens and sessions, webhook events (30 d), heartbeats (30 d), finished jobs (90 d), audit log (365 d);
-tune with `*_RETENTION_DAYS`. **Key rotation**: connected agents get a new key every 30 days (`KEY_ROTATE_AFTER_DAYS`); the old key keeps working
-until the agent uses the new one, so a lost message cannot lock a server out. `pnpm rotate-keys` forces a rotation on every agent's next check.
-**Offline alerts**: set `ALERT_WEBHOOK_URL` (Slack, Mattermost or Discord). A server whose agent is gone for `ALERT_GRACE_SECONDS` (120) gets one alert
-and one recovery notice. Dead connections are detected by a 25 s ping (agent 0.4.0 also drops a link silent for 75 s).
-**Backups**: `scripts/backup-db.sh` (custom-format dump, verified, newest 14 kept, mode 600) and `scripts/restore-db.sh` (empty database only).
-Copy dumps off the machine, and back up `~/.snbd/release-ed25519.pem` separately: losing it means re-signing releases and re-issuing the installer.
-Checks: `src/hardening-smoke.ts` (27 checks; run the API with `ALERT_WEBHOOK_URL=http://localhost:4020 ALERT_GRACE_SECONDS=3 MONITOR_INTERVAL_MS=1000` and `AGENT_BIN=<built agent>`).
+See [.env.example](.env.example), [production settings](deploy/env.production.example), and [Compose configuration](deploy/docker/compose.yml) for deployment-specific settings. Keep real environment files, database backups, agent state, and private release-signing keys out of Git.
 
-## Layout
-`apps/api` Fastify + ws + Postgres · `apps/web` React + Vite + xterm.js · `agent` Go · `packages/proto` shared message schemas
+## Build and deploy
+
+```bash
+pnpm build
+```
+
+This type-checks and builds the frontend into `apps/web/dist`. The API runs TypeScript directly with `tsx`; there is no separate API compilation step. After migrations, launch it with the production environment supplied:
+
+```bash
+pnpm migrate
+NODE_ENV=production pnpm start
+```
+
+Choose a deployment guide:
+
+- [Docker with CloudPanel](docs/DOCKER.md): panel and PostgreSQL containers behind an HTTPS reverse proxy. The image applies migrations on startup. The guide includes details for the existing deployment; substitute your own domain, host, and paths.
+- [CloudPanel deployment](docs/CLOUDPANEL.md): automated systemd installation and a manual alternative.
+- [Staging checklist](docs/STAGING.md): end-to-end checks for provisioning, agents, WHMCS, alerts, backups, and restore.
+
+The systemd files, Caddy example, and production environment template are in `deploy/`. `scripts/install-production.sh --help` lists installer options; `--dry-run` previews its changes. Serve the panel over HTTPS, proxy WebSockets, and allow the required upload size. OAuth connectors also need `/.well-known/oauth-*` discovery routes to reach the API; see the nginx example in the Docker guide.
+
+Create a production customer without demo data using:
+
+```bash
+CLIENT_EMAIL=you@example.com \
+  CLIENT_NAME='Your Name' \
+  CLIENT_PASSWORD='<password-at-least-12-characters>' \
+  pnpm create-client
+```
+
+Add `RESET=1` to reset an existing customer's password and revoke their browser sessions. This helper also reads the root `.env`, so configure it for the intended database.
+
+### Signed agent releases
+
+On the machine used to build releases:
+
+```bash
+node scripts/release.mjs keygen  # once; refuses to overwrite an existing key
+./scripts/build-agent.sh
+```
+
+The build produces Linux amd64 and arm64 binaries, `VERSION`, `SHA256SUMS`, its Ed25519 signature, and the public key in `dist/releases/`. The API serves these files at `/dl/`. The private key stays at `~/.snbd/release-ed25519.pem` (or `SNBD_RELEASE_KEY`); back it up separately and never publish it.
+
+Customers use the command from **Connect existing VPS**, which fetches `/enroll/<token>`. Cloud-init uses `/install.sh` with enrollment settings in `/etc/snbd/agent.env`. The installer checks SHA-256 and verifies the signature when supported; `SNBD_REQUIRE_SIGNATURE=1` makes unavailable signature verification fatal. Re-running the installer upgrades the binary while preserving enrollment unless an explicit enrollment token requests a new connection. Releasing a new binary does not automatically update enrolled VPSs.
+
+### Backups
+
+`scripts/backup-db.sh` creates verified custom-format PostgreSQL dumps and keeps the newest 14. `scripts/restore-db.sh` restores into an empty database. The systemd backup service/timer and Docker backup script provide deployment-specific scheduling options. Copy backups off the panel host and test restoration.
+
+## Integrations
+
+### WHMCS and providers
+
+Copy `whmcs-module/snbdpanel/` to `<whmcs>/modules/servers/snbdpanel/`. Add the panel as a WHMCS server using its hostname, enable **Secure**, and set **Access Hash** to `WHMCS_WEBHOOK_SECRET`. Configure a product with the **SNBD Panel** module and the appropriate provider, region, OS, and plan. Hetzner products require an actual Hetzner server type.
+
+The module sends HMAC-signed requests to `POST /webhooks/whmcs` with timestamp and idempotency headers. Supported actions are `create`, `suspend`, `unsuspend`, `changepackage`, `terminate`, and `sso`. SSO links are single-use and valid for 60 seconds. The [staging guide](docs/STAGING.md) covers full setup and validation.
+
+Check available server types and OS images before real provisioning:
+
+```bash
+pnpm hetzner:check <server-type>
+```
+
+This requires `HETZNER_API_TOKEN` in the command's environment. To exercise the mock provider, run `pnpm mock:hetzner`, then start the API with `HETZNER_API_TOKEN=test-token` and `HETZNER_API_URL=http://localhost:4010/v1`.
+
+### AI assistants (MCP)
+
+The **AI agents** page creates revocable tokens scoped to the customer's servers. MCP clients connect to `https://<panel>/mcp` with a bearer token, or use OAuth authorization with PKCE where supported.
+
+Available tools: `list_servers`, `server_status`, `get_public_ip`, and `view_logs`. They cannot deploy applications or execute arbitrary commands. See [MCP and OAuth setup](docs/MCP.md) for client configuration, permissions, proxy requirements, and protocol details.
+
+## Verification
+
+Basic checks:
+
+```bash
+pnpm --filter @snbd/api typecheck
+pnpm build
+cd agent
+go test ./...
+```
+
+The Go package currently has no unit test files; `go test` verifies that it compiles. Integration smoke scripts live in `apps/api/src/` and require a running API and a disposable migrated database. They create or modify test records and may run commands through agents.
+
+For example, with the seeded agent connected:
+
+```bash
+pnpm --filter @snbd/api exec tsx --env-file=../../.env src/smoke.ts <server-id>
+```
+
+| Script | Coverage / additional setup |
+| --- | --- |
+| `webhook-smoke.ts` | WHMCS webhook behavior. |
+| `provider-smoke.ts` | Mock Hetzner provisioning/reinstall; requires Docker and the mock provider. |
+| `tools-smoke.ts` | File management, app jobs, and password reset; requires Docker and the `snbd-vm-base` image prepared by the provider smoke script. |
+| `hardening-smoke.ts` | Rate limits, cleanup, alerts, and key rotation; requires a native `AGENT_BIN` and the API alert settings listed at the top of the script. |
+| `mcp-smoke.ts` | MCP tools and token isolation; requires `DEMO_PASSWORD` and a native `AGENT_BIN`. |
+| `oauth-smoke.ts` | OAuth/PKCE, refresh/revocation, and MCP SDK authorization; requires `DEMO_PASSWORD` and `PUBLIC_PANEL_URL=http://localhost:3101` on the API. |
+
+Use the same `pnpm --filter @snbd/api exec tsx --env-file=../../.env src/<script>.ts` form for these scripts, supplying their required environment settings. Check each script's setup before running it; several assume the API is on port `3101`.
+
+## Repository layout
+
+```text
+apps/api/          Fastify API, PostgreSQL migrations, providers, MCP/OAuth, smoke scripts
+apps/web/          React + Vite frontend and xterm.js terminal
+agent/             Go VPS agent (terminal, files, jobs, metrics)
+packages/proto/    Shared TypeScript message schemas
+scripts/apps/      Application installation recipes
+scripts/           Release, deployment, backup, and provider utility scripts
+deploy/            Docker Compose, systemd, Caddy, and environment examples
+docs/              Deployment, staging, and integration guides
+whmcs-module/      WHMCS provisioning module and client-area template
+```

@@ -11,6 +11,11 @@ export async function runMaintenance(): Promise<Record<string, number>> {
     webhookEvents: ["delete from webhook_events where created_at < now() - make_interval(days => $1)", [days('WEBHOOK_EVENT_RETENTION_DAYS', 30)]],
     heartbeats: ['delete from heartbeats where at < now() - make_interval(days => $1)', [days('HEARTBEAT_RETENTION_DAYS', 30)]],
     jobs: ["delete from jobs where status in ('done', 'failed') and created_at < now() - make_interval(days => $1)", [days('JOB_RETENTION_DAYS', 90)]],
+    oauthRequests: ['delete from oauth_requests where expires_at < now()', []],
+    oauthCodes: ["delete from oauth_codes where expires_at < now() - interval '1 day'", []],
+    oauthTokens: ["delete from oauth_tokens where expires_at < now() - interval '1 day'", []],
+    oauthGrants: ["delete from oauth_grants where (revoked_at is not null and revoked_at < now() - interval '30 days') or expires_at < now() - interval '30 days'", []],
+    oauthClients: ["delete from oauth_clients c where c.created_at < now() - interval '2 days' and not exists (select 1 from oauth_grants g where g.oauth_client_id = c.client_id)", []],
     auditLog: ['delete from audit_log where at < now() - make_interval(days => $1)', [days('AUDIT_RETENTION_DAYS', 365)]],
   };
   const out: Record<string, number> = {};

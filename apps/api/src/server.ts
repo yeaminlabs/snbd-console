@@ -20,6 +20,9 @@ import { getAdapter } from './providers/index.js';
 import { SESSION_COOKIE, clientFromRequest, startSession } from './session.js';
 import { registerManage } from './manage.js';
 import { registerTools } from './tools.js';
+import { registerTokens } from './tokens.js';
+import { registerMcp } from './mcp.js';
+import { registerOAuth } from './oauth.js';
 import { failPending, failRunningJobs, onJobDone, onJobLog, onRpcResult } from './agentRpc.js';
 
 const HEARTBEAT_STORE_EVERY_MS = 60_000;
@@ -52,6 +55,9 @@ registerRelease(app);
 registerWhmcs(app);
 registerManage(app);
 registerTools(app);
+registerTokens(app);
+registerMcp(app);
+registerOAuth(app);
 
 // ---- auth -----------------------------------------------------------------
 
@@ -145,7 +151,7 @@ app.get<{ Querystring: { server?: string; before?: string; limit?: string } }>('
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
   const before = Number(req.query.before) || null;
   const { rows } = await pool.query(
-    `select a.id, a.action, a.at, a.meta, a.client_id is null as system, s.id as "serverId", s.name as server
+    `select a.id, a.action, a.at, a.meta, a.client_id is null as system, a.via, s.id as "serverId", s.name as server
      from audit_log a join servers s on s.id = a.server_id
      where s.client_id = $1 and ($2::uuid is null or s.id = $2) and ($3::bigint is null or a.id < $3)
      order by a.id desc limit $4`,
@@ -251,6 +257,7 @@ app.get('/agent', { websocket: true, ...ipLimit(300) }, (socket, req) => {
     agents.set(serverId, conn);
     await pool.query(`update servers set status = 'running', reinstall_started_at = null where id = $1 and status in ('provisioning', 'agent_offline', 'stopped')`, [serverId]);
     await pool.query('update servers set reinstall_started_at = null where id = $1', [serverId]);
+    await pool.query('update servers set last_seen_ip = $2::inet where id = $1', [serverId, ip]).catch(() => {});
     await audit(null, serverId, 'agent.connected');
     send(socket, { type: 'ready' });
     await pool.query('update servers set offline_since = null where id = $1', [serverId]);
@@ -410,7 +417,7 @@ if (process.env.SERVE_WEB === 'true' || process.env.NODE_ENV === 'production') {
   if (!existsSync(join(webDist, 'index.html'))) { console.error('web app is not built: run pnpm --filter @snbd/web build'); process.exit(1); }
   await app.register(fastifyStatic, { root: webDist, wildcard: false, setHeaders: (res, path) => { if (path.includes('/assets/')) res.header('cache-control', 'public, max-age=31536000, immutable'); } });
   app.setNotFoundHandler((req, reply) => {
-    const api = /^\/(api|dl|ws|agent|webhooks|enroll|sso|install\.sh)(\/|$)/.test(req.url);
+    const api = /^\/(api|dl|ws|agent|webhooks|enroll|sso|mcp|oauth|\.well-known|install\.sh)(\/|$)/.test(req.url);
     if (req.method === 'GET' && !api) return reply.header('cache-control', 'no-cache').sendFile('index.html');
     return reply.code(404).send({ error: 'Not found' });
   });

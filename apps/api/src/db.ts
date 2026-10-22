@@ -23,6 +23,6 @@ export async function verifyPassword(pw: string, stored: string): Promise<boolea
   return timingSafeEqual(actual, expected);
 }
 
-export async function audit(clientId: string | null, serverId: string | null, action: string, meta: object = {}) {
-  await pool.query('insert into audit_log (client_id, server_id, action, meta) values ($1, $2, $3, $4)', [clientId, serverId, action, meta]);
+export async function audit(clientId: string | null, serverId: string | null, action: string, meta: object = {}, via: string | null = null) {
+  await pool.query('insert into audit_log (client_id, server_id, action, meta, via) values ($1, $2, $3, $4, $5)', [clientId, serverId, action, meta, via]);
 }

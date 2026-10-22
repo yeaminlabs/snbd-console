@@ -10,6 +10,9 @@ export default defineConfig({
     proxy: {
       '/api': api,
       '/sso': api,
+      '/mcp': api,
+      '/oauth': api,
+      '/.well-known': api,
       '/ws': { target: api, ws: true },
     },
   },

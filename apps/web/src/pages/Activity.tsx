@@ -28,6 +28,9 @@ const label: Record<string, (m: Record<string, any>) => string> = {
   'app.cancel': () => 'Install cancelled',
   'password.reset': (m) => `Password reset for ${m.user ?? 'root'}`,
   'power.start': () => 'Power on', 'power.stop': () => 'Shut down', 'power.reboot': () => 'Reboot',
+  'mcp.server_status': () => 'Agent read the server status',
+  'mcp.get_public_ip': () => 'Agent looked up the public IP',
+  'mcp.view_logs': (m) => `Agent read logs (${m.source ?? 'system'})`,
   'alert.offline': (m) => `Alert sent: agent offline for ${m.minutes} min`,
   'alert.recovered': () => 'Recovery notice sent',
 };
@@ -73,7 +76,7 @@ export function Activity() {
                 <span className="muted" title={new Date(a.at).toLocaleString()}>{new Date(a.at).toLocaleString([], { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
                 <a href={`#/servers/${a.serverId}`} style={{ color: 'var(--ink)', fontWeight: 500, textDecoration: 'none' }}>{a.server}</a>
                 <span style={{ wordBreak: 'break-word' }}>{(label[a.action] ?? (() => a.action))(a.meta ?? {})}</span>
-                <span className="muted">{a.system ? 'System' : 'You'}</span>
+                <span className="muted">{a.via ? `Agent: ${a.via}` : a.system ? 'System' : 'You'}</span>
               </div>
             ))}
           </div>

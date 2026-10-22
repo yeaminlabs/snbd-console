@@ -1,7 +1,7 @@
 # Run SNBD Console in Docker (with CloudPanel in front)
 
 Two containers, `snbd-console-api` (the panel and web app) and `snbd-console-db` (its own PostgreSQL), run from one folder,
-`/opt/snbd-docker`. The panel is published on **`127.0.0.1:3101` only**; CloudPanel's nginx proxies your domain to it. Nothing else on the
+`/opt/snbd-docker`. The panel is published on **`127.0.0.1:3199` only** (`PANEL_PORT` in `.env`); CloudPanel's nginx proxies your domain to it. Nothing else on the
 server is touched: no other site, container, database, nginx file or firewall rule.
 
 ## What is where (on the server)
@@ -22,17 +22,31 @@ The DNS record must already point at the server (`dig +short console.deltadns.xy
 1. **Sites → Add Site → Create a Node.js Site**
    - Domain Name: `console.deltadns.xyz`
    - Node.js Version: any (22 is fine; it is not used)
-   - **App Port: `3101`**
+   - **App Port: `3199`**. CloudPanel refuses a port that is already in use, so create the site while 3199 is still free, then make the container use it:
+     set `PANEL_PORT=3199` in `/opt/snbd-docker/.env` and run `docker compose up -d` there (restarts only the panel container; the first start uses 3101).
    - Create. CloudPanel makes a Site User for it; you never need to log in as that user.
-   - **Do not start anything under PM2 and do not upload files to this site.** The panel is already running in Docker; CloudPanel only proxies to port 3101.
+   - **Do not start anything under PM2 and do not upload files to this site.** The panel is already running in Docker; CloudPanel only proxies to the panel's port.
 2. **Certificate:** open the new site → **SSL/TLS** → Actions → **New Let's Encrypt Certificate** → Create and Install.
 3. **Upload size:** open the site → **Vhost**. Inside `server { ... }`, above `location / {`, add this line and Save:
    ```nginx
      client_max_body_size 210m;
    ```
    Without it, file uploads above 1 MB fail. (CloudPanel's template already passes WebSockets and allows 900-second connections, which the terminal needs.)
+   **For the Claude app connector (OAuth),** also add this block in the same place. CloudPanel's template has its own `location ~ /.well-known` rule that
+   answers 404 for everything under `/.well-known/`, which hides the panel's sign-in discovery address. This more specific block takes priority only for
+   `/.well-known/oauth-...`; certificate renewal paths (`/.well-known/acme-challenge`) are not affected:
+   ```nginx
+     location ^~ /.well-known/oauth- {
+       proxy_pass http://127.0.0.1:3199;
+       proxy_http_version 1.1;
+       proxy_set_header Host $http_host;
+       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+       proxy_set_header X-Forwarded-Proto $scheme;
+     }
+   ```
+   Check: `curl -s https://console.deltadns.xyz/.well-known/oauth-authorization-server` prints JSON (not a 404 page).
 4. **Check** from any computer: `https://console.deltadns.xyz/` shows the sign-in page, and `curl -I https://console.deltadns.xyz/` answers 200.
-5. **Firewall:** keep 80 and 443 open. Never open port 3101 (it is bound to localhost anyway).
+5. **Firewall:** keep 80 and 443 open. Never open the panel port (it is bound to localhost anyway).
 
 ## Create your login (nothing exists until you do this)
 ```bash

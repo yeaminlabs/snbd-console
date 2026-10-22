@@ -11,3 +11,4 @@ export const IconReceipt = icon(<><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" /><path
 export const IconSupport = icon(<><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3.5" /></>);
 export const IconCopy = icon(<><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></>);
 export const IconArrowUpRight = icon(<path d="M7 17L17 7M9 7h8v8" />);
+export const IconBot = icon(<><rect x="4" y="8" width="16" height="11" rx="3" /><path d="M12 4v4M9 13h.01M15 13h.01M9.5 16.5h5" /></>);

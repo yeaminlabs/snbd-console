@@ -53,6 +53,7 @@ export async function registerHardening(app: FastifyInstance) {
   if (!isProd) allowedHosts.add('localhost:5173');
   app.addHook('onRequest', async (req, reply) => {
     if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return;
+    if (/^\/oauth\/(register|token|revoke)(\?|$)/.test(req.url)) return; // no cookies here: authenticated by PKCE and codes, and browser-based MCP clients call them
     const origin = req.headers.origin;
     if (!origin) return; // no Origin: not a browser cross-site request (curl, WHMCS, the agent)
     const host = hostOf(origin);
@@ -78,7 +79,7 @@ export async function registerHardening(app: FastifyInstance) {
     max: Number(process.env.RATE_LIMIT_PER_MIN ?? 600),
     timeWindow: '1 minute',
     // signed-in browsers are counted per session so people behind one office IP do not share a budget
-    keyGenerator: (req: FastifyRequest) => req.cookies?.[SESSION_COOKIE]?.slice(0, 16) ?? req.ip,
+    keyGenerator: (req: FastifyRequest) => req.cookies?.[SESSION_COOKIE]?.slice(0, 16) ?? (req.headers.authorization?.startsWith('Bearer snbd_') ? 'tok:' + req.headers.authorization.slice(7, 19) : req.ip),
     errorResponseBuilder: (_req, ctx) => ({ error: `Too many requests. Try again in ${Math.ceil(ctx.ttl / 1000)} seconds.` }),
   });
 }

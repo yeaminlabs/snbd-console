@@ -7,6 +7,8 @@ import { Reinstall } from './pages/Reinstall';
 import { Files } from './pages/Files';
 import { Apps } from './pages/Apps';
 import { Activity } from './pages/Activity';
+import { Agents } from './pages/Agents';
+import { Authorize } from './pages/Authorize';
 import { Shell } from './components/Shell';
 import { TerminalPage } from './pages/TerminalPage';
 
@@ -32,6 +34,8 @@ export function App() {
   if (me === undefined) return null;
   if (!me) return <Login onSignedIn={setMe} />;
 
+  if (route === '/authorize') return <Authorize id={new URLSearchParams(query).get('req') ?? ''} />;
+  if (route === '/agents') return <Shell me={me} onSignedOut={() => setMe(null)} active="agents"><Agents /></Shell>;
   if (route === '/activity') return <Shell me={me} onSignedOut={() => setMe(null)} active="activity"><Activity /></Shell>;
   const match = route.match(/^\/servers\/([0-9a-f-]{36})(\/terminal|\/reinstall|\/files|\/apps)?$/);
   return (
