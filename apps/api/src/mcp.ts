@@ -7,23 +7,38 @@ import { baseUrl } from './oauth.js';
 import { authenticateToken, type TokenAuth } from './tokens.js';
 
 // Model Context Protocol over "Streamable HTTP", stateless: every POST is a JSON-RPC message (or a batch) answered with plain JSON.
-// Scope today: read-only tools. Each tool states the token scope it needs so write tools can be added without changing the checks.
+// Scopes: 'read' – no side effects; 'deploy' – write tools visible only to deploy-scoped tokens.
 
 const SUPPORTED_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const SERVER_INFO = { name: 'snbd-console', title: 'SNBD Console', version: '0.1.0' };
 
-const INSTRUCTIONS = `You are connected to the customer's SNBD hosting panel. Their servers (VPS) are real machines, so be careful and honest.
+const INSTRUCTIONS_READ = `You are connected to the customer's SNBD hosting panel. Their servers (VPS) are real machines, so be careful and honest.
 - If the customer has more than one server, call list_servers and ask which one they mean before doing anything on it.
 - A server must show agentOnline=true before its logs or IP can be read. If it is offline, say so; do not guess.
 - To tell the customer which DNS A record to add, call get_public_ip and use detectedPublicIp. If it differs from panelSawAgentIp, explain the difference and ask them to confirm.
 - Logs can contain private data. Summarise problems; do not paste secrets into the chat.
-- These tools only read. Never claim you changed something on a server.`;
+- This token is read-only. Never claim you changed something on a server.`;
+
+const INSTRUCTIONS_DEPLOY = `You are connected to the customer's SNBD hosting panel. Their servers (VPS) are real machines, so be careful and honest.
+- If the customer has more than one server, call list_servers and ask which one they mean before doing anything on it.
+- A server must show agentOnline=true before you act on it. If it is offline, say so; do not proceed.
+- To tell the customer which DNS A record to add, call get_public_ip and use detectedPublicIp. If it differs from panelSawAgentIp, explain the difference and ask them to confirm.
+- Logs can contain private data. Summarise problems; do not paste secrets into the chat.
+- This token has write (deploy) access. You may run commands, write files, and restart services.
+- Always confirm with the customer before running destructive commands (rm, format, wipe, kill) or overwriting critical system files.
+- Prefer targeted operations (restart_service, write_file) over raw run_command when a specialised tool exists.
+- After a write operation, verify success by reading state back or checking a service status.`;
 
 interface ToolDef {
   name: string;
   title: string;
   description: string;
   scope: 'read' | 'deploy';
+  /** MCP protocol annotations */
+  readOnlyHint?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
   inputSchema: object;
   args: z.ZodTypeAny;
   run: (auth: TokenAuth, args: any) => Promise<{ text: string; serverId?: string; audit?: object }>;
@@ -64,6 +79,18 @@ async function execOnServer(serverId: string, script: string, timeoutMs = 20_000
     throw e;
   }
 }
+
+async function fsRpc<T = any>(serverId: string, op: string, args: object, timeoutMs = 15_000): Promise<T> {
+  try {
+    return await rpc<T>(serverId, op, args, timeoutMs);
+  } catch (e) {
+    if (e instanceof RpcError) throw new ToolError(e.message);
+    throw e;
+  }
+}
+
+const SAFE_SERVICE = /^[a-z][a-z0-9@._-]{0,79}(\.service)?$/i;
+const FILE_CONTENT_MAX = 512 * 1024; // 512 KB via MCP write_file
 
 const LOG_SOURCE = /^(system|agent|unit:[A-Za-z0-9@._:-]{1,80}|docker:[A-Za-z0-9][A-Za-z0-9_.-]{0,62})$/;
 
@@ -183,6 +210,158 @@ const TOOLS: ToolDef[] = [
       };
     },
   },
+  // ── Read helpers ─────────────────────────────────────────────────────────
+  {
+    name: 'list_files',
+    title: 'List files',
+    description: 'Lists files and directories at a path on the server. Returns name, type (file/dir/symlink), size, and modification time for each entry.',
+    scope: 'read',
+    readOnlyHint: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        server: { type: 'string', description: 'Server id or name' },
+        path: { type: 'string', description: 'Absolute path to list', default: '/' },
+      },
+      required: ['server'],
+      additionalProperties: false,
+    },
+    args: z.object({ server: serverRef, path: z.string().trim().min(1).max(4096).default('/') }).strict(),
+    async run(auth, a) {
+      const s = await resolveServer(auth, a.server);
+      requireOnline(s);
+      const entries = await fsRpc<Array<{ name: string; type: string; size: number; modTime: string }>>(s.id, 'fs.list', { path: a.path });
+      return { serverId: s.id, text: json({ path: a.path, count: entries.length, entries }) };
+    },
+  },
+  {
+    name: 'read_file',
+    title: 'Read file',
+    description: 'Reads up to 128 KB from a file on the server. Useful for reading config files, logs, scripts, etc. For larger files use view_logs or run_command with tail/grep.',
+    scope: 'read',
+    readOnlyHint: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        server: { type: 'string', description: 'Server id or name' },
+        path: { type: 'string', description: 'Absolute path to the file' },
+        offset: { type: 'integer', minimum: 0, default: 0, description: 'Byte offset to start reading from' },
+      },
+      required: ['server', 'path'],
+      additionalProperties: false,
+    },
+    args: z.object({ server: serverRef, path: z.string().trim().min(1).max(4096), offset: z.number().int().min(0).default(0) }).strict(),
+    async run(auth, a) {
+      const s = await resolveServer(auth, a.server);
+      requireOnline(s);
+      const MAX_READ = 128 * 1024;
+      const result = await fsRpc<{ data: string; eof: boolean }>(s.id, 'fs.read', { path: a.path, offset: a.offset, length: MAX_READ });
+      const truncated = !result.eof;
+      return {
+        serverId: s.id,
+        audit: { path: a.path },
+        text: `Contents of "${a.path}" on "${s.name}"${a.offset > 0 ? ` (offset ${a.offset})` : ''}${truncated ? ' [truncated at 128 KB]' : ''}:\n\n${result.data}`,
+      };
+    },
+  },
+  // ── Write tools (scope: deploy) ───────────────────────────────────────────
+  {
+    name: 'run_command',
+    title: 'Run command',
+    description: 'Runs a shell command on the server and returns stdout + stderr combined with the exit code. Timeout is 60 seconds maximum. Use for installs, config changes, or any operation not covered by a dedicated tool. Confirm with the customer before running destructive commands.',
+    scope: 'deploy',
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        server: { type: 'string', description: 'Server id or name' },
+        command: { type: 'string', description: 'Shell command to run' },
+        timeout_seconds: { type: 'integer', minimum: 1, maximum: 60, default: 30, description: 'Max seconds to wait (1–60)' },
+      },
+      required: ['server', 'command'],
+      additionalProperties: false,
+    },
+    args: z.object({ server: serverRef, command: z.string().trim().min(1).max(8192), timeout_seconds: z.number().int().min(1).max(60).default(30) }).strict(),
+    async run(auth, a) {
+      const s = await resolveServer(auth, a.server);
+      requireOnline(s);
+      const timeoutMs = a.timeout_seconds * 1000;
+      const r = await execOnServer(s.id, a.command, timeoutMs);
+      return {
+        serverId: s.id,
+        audit: { command: a.command.slice(0, 500), exitCode: r.code },
+        text: `Command on "${s.name}" exited ${r.code}:\n\n${r.out.trim() || '(no output)'}`,
+      };
+    },
+  },
+  {
+    name: 'write_file',
+    title: 'Write file',
+    description: 'Writes (creates or overwrites) a file on the server with the given content. Maximum 512 KB. The parent directory must already exist. Use for config files, scripts, etc. Overwrites without warning — confirm the path with the customer first.',
+    scope: 'deploy',
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        server: { type: 'string', description: 'Server id or name' },
+        path: { type: 'string', description: 'Absolute path to write to' },
+        content: { type: 'string', description: 'Text content to write (UTF-8, max 512 KB)' },
+      },
+      required: ['server', 'path', 'content'],
+      additionalProperties: false,
+    },
+    args: z.object({ server: serverRef, path: z.string().trim().min(1).max(4096), content: z.string().max(FILE_CONTENT_MAX) }).strict(),
+    async run(auth, a) {
+      const s = await resolveServer(auth, a.server);
+      requireOnline(s);
+      await fsRpc(s.id, 'fs.writefile', { path: a.path, data: a.content });
+      return {
+        serverId: s.id,
+        audit: { path: a.path, bytes: Buffer.byteLength(a.content) },
+        text: `Wrote ${Buffer.byteLength(a.content)} bytes to "${a.path}" on "${s.name}".`,
+      };
+    },
+  },
+  {
+    name: 'restart_service',
+    title: 'Restart service',
+    description: "Runs systemctl start/stop/restart/enable/disable for a named systemd service on the server. Use 'restart' to apply config changes, 'enable'/'disable' to control auto-start on boot.",
+    scope: 'deploy',
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        server: { type: 'string', description: 'Server id or name' },
+        service: { type: 'string', description: 'Systemd unit name, e.g. nginx or nginx.service' },
+        action: { type: 'string', enum: ['start', 'stop', 'restart', 'enable', 'disable', 'status'], default: 'restart' },
+      },
+      required: ['server', 'service'],
+      additionalProperties: false,
+    },
+    args: z.object({
+      server: serverRef,
+      service: z.string().trim().regex(SAFE_SERVICE, 'Invalid service name'),
+      action: z.enum(['start', 'stop', 'restart', 'enable', 'disable', 'status']).default('restart'),
+    }).strict(),
+    async run(auth, a) {
+      const s = await resolveServer(auth, a.server);
+      requireOnline(s);
+      const unit = a.service.includes('.') ? a.service : `${a.service}.service`;
+      const r = await execOnServer(s.id, `systemctl ${a.action} ${unit} 2>&1; systemctl is-active ${unit} 2>/dev/null || true`, 20_000);
+      const active = r.out.trim().split('\n').pop() ?? '';
+      return {
+        serverId: s.id,
+        audit: { service: unit, action: a.action },
+        text: `systemctl ${a.action} ${unit} on "${s.name}" — service is now: ${active || `exit ${r.code}`}${r.out.trim() ? `\n\n${r.out.trim()}` : ''}`,
+      };
+    },
+  },
 ];
 
 const rpcError = (id: unknown, code: number, message: string) => ({ jsonrpc: '2.0', id: id ?? null, error: { code, message } });
@@ -199,7 +378,7 @@ async function handleMessage(msg: any, auth: TokenAuth): Promise<object | null> 
         protocolVersion: SUPPORTED_VERSIONS.includes(wanted) ? wanted : SUPPORTED_VERSIONS[0],
         capabilities: { tools: { listChanged: false } },
         serverInfo: SERVER_INFO,
-        instructions: INSTRUCTIONS,
+        instructions: auth.scope === 'deploy' ? INSTRUCTIONS_DEPLOY : INSTRUCTIONS_READ,
       });
     }
     case 'ping':
@@ -208,7 +387,12 @@ async function handleMessage(msg: any, auth: TokenAuth): Promise<object | null> 
       return rpcResult(msg.id, {
         tools: TOOLS.filter((t) => t.scope === 'read' || auth.scope === 'deploy').map((t) => ({
           name: t.name, title: t.title, description: t.description, inputSchema: t.inputSchema,
-          annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: t.name === 'get_public_ip' },
+          annotations: {
+            readOnlyHint: t.readOnlyHint ?? (t.scope === 'read'),
+            destructiveHint: t.destructiveHint ?? false,
+            idempotentHint: t.idempotentHint ?? (t.scope === 'read'),
+            openWorldHint: t.openWorldHint ?? (t.name === 'get_public_ip'),
+          },
         })),
       });
     case 'tools/call': {
