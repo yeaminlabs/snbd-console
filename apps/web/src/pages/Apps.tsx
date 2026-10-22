@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, type AppInfo, type Server } from '../api';
 import { ServerHeader } from '../components/ServerHeader';
+import { AppLogo } from '../components/AppLogos';
 
 // installers print colour codes; the log pane shows plain text
 const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
@@ -84,7 +85,7 @@ export function Apps({ serverId }: { serverId: string }) {
               return (
                 <div className="card pad" key={a.id} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                    <div className="ic" aria-hidden="true">{a.name.charAt(0)}</div>
+                    <div className="ic" aria-hidden="true"><AppLogo id={a.id} name={a.name} /></div>
                     <div><div style={{ fontWeight: 600 }}>{a.name}</div><div className="muted" style={{ fontSize: 12 }}>{a.tag}</div></div>
                   </div>
                   <div className="muted" style={{ flex: 1 }}>{a.desc}</div>
