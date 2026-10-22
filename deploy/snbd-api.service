@@ -7,6 +7,8 @@ Wants=network-online.target
 User=snbd
 WorkingDirectory=/opt/snbd/apps/api
 EnvironmentFile=/etc/snbd-console.env
+# the private Node 22 installed by scripts/install-production.sh (the system Node is not used)
+Environment=PATH=/opt/snbd-node/bin:/usr/local/bin:/usr/bin:/bin
 # run tsx directly: pnpm would try to write into its home directory, which this sandbox keeps read-only
 ExecStart=/opt/snbd/apps/api/node_modules/.bin/tsx src/server.ts
 Restart=always

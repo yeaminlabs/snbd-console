@@ -1,0 +1,60 @@
+# SNBD Console in Docker: the panel and its own PostgreSQL, isolated on their own network.
+# Run from the folder that holds this file and a ".env" next to it:   docker compose up -d
+name: snbd-console
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: snbd-console-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: snbd
+      POSTGRES_DB: snbd_console
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [internal]            # no published ports: only the panel container can reach it
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U snbd -d snbd_console"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 384m
+    security_opt: ["no-new-privileges:true"]
+
+  api:
+    image: ${SNBD_IMAGE:-snbd-console:latest}
+    container_name: snbd-console-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0                 # inside the container; the host side below is bound to 127.0.0.1 only
+      PORT: "3101"
+      TRUST_PROXY: ${TRUST_PROXY:-172.16.0.0/12,192.168.0.0/16,10.0.0.0/8}   # the host nginx arrives via the Docker bridge gateway
+      DATABASE_URL: postgres://snbd:${DB_PASSWORD}@db:5432/snbd_console
+      PUBLIC_PANEL_URL: ${PUBLIC_PANEL_URL:?set PUBLIC_PANEL_URL in .env}
+      WHMCS_WEBHOOK_SECRET: ${WHMCS_WEBHOOK_SECRET:-}
+      HETZNER_API_TOKEN: ${HETZNER_API_TOKEN:-}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      RELEASES_DIR: /app/dist/releases
+    ports:
+      - "127.0.0.1:${PANEL_PORT:-3101}:3101"
+    volumes:
+      - ./releases:/app/dist/releases:ro
+    networks: [internal]
+    mem_limit: 512m
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+networks:
+  internal:
+    name: snbd-console-net
+
+volumes:
+  pgdata:
+    name: snbd-console-pgdata

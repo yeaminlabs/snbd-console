@@ -35,10 +35,11 @@ rsync -a --exclude node_modules --exclude .env --exclude .git --exclude backups 
 cd /root/snbd-src
 ./scripts/install-production.sh --domain panel.yourdomain.com --email you@yourdomain.com --name "Your Name"
 ```
+Add `--dry-run` first to see exactly what it would change without changing anything; it asks for confirmation unless you pass `--yes`.
 Options: `--password` (otherwise a random one is generated and saved to `/root/snbd-first-login.txt`, mode 600), `--hetzner-token`, `--alert-webhook`,
 `--port`, `--skip-releases`, `--help`.
 
-It installs PostgreSQL and Node 22, creates the database and secrets (`/etc/snbd-console.env`), builds the web app, applies the database tables,
+It installs PostgreSQL (if missing) and its **own private Node 22 in `/opt/snbd-node`**, so the server's system Node, `n8n` and your other sites are never touched. It creates the database and secrets (`/etc/snbd-console.env`), builds the web app, applies the database tables,
 creates your login, starts the panel, sets up a daily backup, runs one backup, and checks that the panel answers on localhost only. A failing step
 stops the script with the reason.
 
@@ -49,7 +50,7 @@ certificate, and add `client_max_body_size 210m;` in the **Vhost** (Step 8 below
 migrations and restarts the panel. It does not touch nginx or the firewall.
 
 Tested end to end in a fresh Ubuntu 24.04 server with systemd (first install, login, re-run, backup, localhost-only binding). Not tested on a
-real CloudPanel machine: it assumes nothing else uses port 3101, and that Node 22 can be installed system-wide next to CloudPanel's own per-site Node.
+real CloudPanel machine: it assumes nothing else uses port 3101.
 
 The rest of this page is the manual version of the same steps, plus the CloudPanel details.
 

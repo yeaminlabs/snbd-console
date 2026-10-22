@@ -7,18 +7,20 @@
 #        cd /root/snbd-src && ./scripts/install-production.sh --domain panel.example.com --email you@example.com
 #   3. In CloudPanel add a Node.js site for the domain with App Port 3101 (the script prints the exact steps).
 #
-# It installs PostgreSQL and Node 22, runs the panel as the `snbd` user under systemd on 127.0.0.1:3101, creates the
+# It installs PostgreSQL (if missing) and a PRIVATE Node 22 in /opt/snbd-node (the system Node is never changed), runs the panel
+# as the `snbd` user under systemd on 127.0.0.1:3101, creates the
 # database, secrets and first login, installs a daily backup timer, and checks that the panel answers.
 # Safe to run again: it updates the code, applies migrations and restarts, and keeps existing secrets and data.
 # It does not touch nginx, the firewall or CloudPanel.
 set -Eeuo pipefail
 
 APP_DIR=/opt/snbd
+NODE_HOME=/opt/snbd-node
 ENV_FILE=/etc/snbd-console.env
 BACKUP_DIR=/var/backups/snbd
 SVC_USER=snbd
 PORT=3101
-DOMAIN="" ; EMAIL="" ; NAME="Admin" ; PASSWORD="" ; HETZNER_TOKEN="" ; ALERT_URL="" ; SKIP_RELEASES=0
+DOMAIN="" ; EMAIL="" ; NAME="Admin" ; PASSWORD="" ; HETZNER_TOKEN="" ; ALERT_URL="" ; SKIP_RELEASES=0 ; DRY_RUN=0 ; ASSUME_YES=0
 
 c_ok=$'\033[32m'; c_warn=$'\033[33m'; c_err=$'\033[31m'; c_bold=$'\033[1m'; c_off=$'\033[0m'
 step() { printf '\n%s==> %s%s\n' "$c_bold" "$*" "$c_off"; }
@@ -37,6 +39,8 @@ Usage: install-production.sh --domain panel.example.com [options]
   --hetzner-token T    Hetzner Cloud API token (optional, can be added later in /etc/snbd-console.env)
   --alert-webhook U    Slack/Discord/Mattermost webhook for offline alerts (optional)
   --port N             local port the panel listens on (default 3101)
+  --dry-run            run the checks and show what would change, then stop (changes nothing)
+  --yes                do not ask for confirmation
   --skip-releases      do not require dist/releases (agent downloads will not work until you add them)
   -h, --help           this text
 EOF
@@ -52,10 +56,15 @@ while [ $# -gt 0 ]; do
     --alert-webhook) ALERT_URL="${2:-}"; shift 2 ;;
     --port) PORT="${2:-}"; shift 2 ;;
     --skip-releases) SKIP_RELEASES=1; shift ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    --yes|-y) ASSUME_YES=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; die "unknown option: $1" ;;
   esac
 done
+
+# a clean PATH: root's nvm or other per-user Node installs must never leak in (systemd and the service user cannot see them)
+export PATH="$NODE_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 # ---------------------------------------------------------------- preflight
 step "Checking the server"
@@ -83,26 +92,53 @@ if ss -ltn 2>/dev/null | awk '{print $4}' | grep -Eq "[:.]${PORT}$" && ! systemc
   die "port $PORT is already in use by something else (use --port)"
 fi
 
+
+step "What this will change on this server"
+if [ -x "$NODE_HOME/bin/node" ] && [ "$("$NODE_HOME/bin/node" -p 'process.versions.node.split(".")[0]')" -ge 22 ]; then NODE_PLAN="keep the private Node.js in $NODE_HOME"; else NODE_PLAN="download Node.js 22 from nodejs.org into $NODE_HOME (checked against its published SHA-256); the system Node ($(env -i PATH=/usr/local/bin:/usr/bin:/bin node --version 2>/dev/null || echo none)) is NOT changed"; fi
+cat <<PLAN
+  - apt: install postgresql, rsync, curl, openssl, iproute2 if missing (existing PostgreSQL and its databases are kept)
+  - $NODE_PLAN
+  - create system user '$SVC_USER', copy the project to $APP_DIR
+  - PostgreSQL: create role 'snbd' and database 'snbd_console' (no other database is touched)
+  - write $ENV_FILE (secrets), create tables, create the login${EMAIL:+ for $EMAIL}
+  - systemd: snbd-api (127.0.0.1:$PORT), snbd-backup timer; backups in $BACKUP_DIR
+  - NOT touched: nginx, CloudPanel, the firewall, other sites, other databases
+PLAN
+if [ "$DRY_RUN" = 1 ]; then ok "dry run: nothing was changed"; exit 0; fi
+if [ "$ASSUME_YES" != 1 ]; then
+  [ -t 0 ] || die "not a terminal: re-run with --yes to confirm (or --dry-run to preview)"
+  read -r -p "Continue? [y/N] " ANSWER; case "$ANSWER" in y|Y|yes|YES) ;; *) die "cancelled" ;; esac
+fi
+
 # ---------------------------------------------------------------- packages
-step "Installing packages (PostgreSQL, Node.js 22, tools)"
+step "Installing packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq postgresql postgresql-client rsync curl ca-certificates openssl gnupg iproute2 >/dev/null
+apt-get install -y -qq postgresql postgresql-client rsync curl ca-certificates openssl iproute2 >/dev/null
 systemctl enable --now postgresql >/dev/null 2>&1 || true
 for _ in $(seq 1 30); do pg_isready -q && break; sleep 1; done
 pg_isready -q || die "PostgreSQL did not start (journalctl -u postgresql)"
 ok "PostgreSQL $(psql --version | awk '{print $3}')"
 
-node_major() { command -v node >/dev/null 2>&1 && node -p 'process.versions.node.split(".")[0]' || echo 0; }
+step "Private Node.js 22 in $NODE_HOME"
+node_major() { [ -x "$NODE_HOME/bin/node" ] && "$NODE_HOME/bin/node" -p 'process.versions.node.split(".")[0]' || echo 0; }
 if [ "$(node_major)" -lt 22 ]; then
-  # CloudPanel keeps Node under each site user (nvm); the panel needs its own system-wide one
-  curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null
-  apt-get install -y -qq nodejs >/dev/null
+  case "$(uname -m)" in x86_64|amd64) NARCH=x64 ;; aarch64|arm64) NARCH=arm64 ;; *) die "unsupported CPU: $(uname -m)" ;; esac
+  NTMP="$(mktemp -d)"; trap 'rm -rf "$NTMP"' EXIT
+  curl -fsSL "https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt" -o "$NTMP/SHASUMS256.txt"
+  NLINE="$(grep " node-v22\.[0-9.]*-linux-${NARCH}\.tar\.gz\$" "$NTMP/SHASUMS256.txt" | head -n1)"
+  [ -n "$NLINE" ] || die "could not find a Node.js 22 build for linux-$NARCH on nodejs.org"
+  NFILE="${NLINE##* }"
+  curl -fsSL "https://nodejs.org/dist/latest-v22.x/$NFILE" -o "$NTMP/$NFILE"
+  ( cd "$NTMP" && grep " $NFILE\$" SHASUMS256.txt | sha256sum -c - >/dev/null ) || die "Node.js download failed its SHA-256 check; refusing to install it"
+  rm -rf "$NODE_HOME.new" && mkdir -p "$NODE_HOME.new"
+  tar -xzf "$NTMP/$NFILE" -C "$NODE_HOME.new" --strip-components=1
+  rm -rf "$NODE_HOME" && mv "$NODE_HOME.new" "$NODE_HOME"
 fi
-[ "$(node_major)" -ge 22 ] || die "Node.js 22+ is required (found $(node --version 2>/dev/null || echo none))"
-command -v pnpm >/dev/null 2>&1 || npm install -g pnpm >/dev/null 2>&1
-command -v pnpm >/dev/null 2>&1 || die "pnpm did not install"
-ok "Node $(node --version), pnpm $(pnpm --version)"
+[ "$(node_major)" -ge 22 ] || die "private Node.js 22 is not usable"
+[ -x "$NODE_HOME/bin/pnpm" ] || "$NODE_HOME/bin/npm" install -g pnpm >/dev/null 2>&1
+[ -x "$NODE_HOME/bin/pnpm" ] || die "pnpm did not install"
+ok "Node $("$NODE_HOME/bin/node" --version) and pnpm $("$NODE_HOME/bin/pnpm" --version) in $NODE_HOME (system Node untouched)"
 
 # ---------------------------------------------------------------- user and code
 step "Putting the code in $APP_DIR"
@@ -155,7 +191,7 @@ ok "settings in $ENV_FILE (mode 640, readable by root and $SVC_USER only)"
 
 # ---------------------------------------------------------------- build, migrate, first login
 step "Installing dependencies and building the web app"
-as_svc() { runuser -u "$SVC_USER" -- env HOME="$APP_DIR" PATH="$PATH" "$@"; }
+as_svc() { runuser -u "$SVC_USER" -- env HOME="$APP_DIR" PATH="$PATH" "$@"; }  # PATH starts with $NODE_HOME/bin
 ( cd "$APP_DIR" && as_svc pnpm install --frozen-lockfile >/dev/null && as_svc pnpm build >/dev/null )
 ok "built"
 
