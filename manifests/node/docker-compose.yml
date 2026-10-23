@@ -1,0 +1,13 @@
+services:
+  snbd-node:
+    image: node:22-alpine
+    container_name: snbd-node
+    restart: unless-stopped
+    working_dir: /workspace
+    volumes:
+      - snbd-node-workspace:/workspace
+    command: ["tail", "-f", "/dev/null"]
+
+volumes:
+  snbd-node-workspace:
+    name: snbd-node-workspace

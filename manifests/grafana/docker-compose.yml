@@ -1,0 +1,13 @@
+services:
+  snbd-grafana:
+    image: grafana/grafana:latest
+    container_name: snbd-grafana
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT}:3000"
+    volumes:
+      - snbd-grafana-data:/var/lib/grafana
+
+volumes:
+  snbd-grafana-data:
+    name: snbd-grafana-data

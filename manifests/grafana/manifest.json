@@ -1,0 +1,17 @@
+{
+  "id": "grafana",
+  "name": "Grafana",
+  "tag": "Monitoring",
+  "desc": "Open-source analytics and dashboarding platform for metrics and logs.",
+  "version": "latest",
+  "type": "compose",
+  "installDir": "/opt/snbd/apps/grafana",
+  "containerName": "snbd-grafana",
+  "check": "docker ps --format '{{.Names}}' | grep -qx snbd-grafana",
+  "postInstall": {
+    "note": "Grafana is running at http://127.0.0.1:${GRAFANA_PORT} (use SSH tunnel or open port). Default login: admin / admin — change it on first sign-in."
+  },
+  "form": [
+    { "key": "GRAFANA_PORT", "label": "HTTP port", "type": "number", "default": "3000", "required": true }
+  ]
+}

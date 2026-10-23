@@ -1,0 +1,13 @@
+services:
+  snbd-nextcloud:
+    image: nextcloud:latest
+    container_name: snbd-nextcloud
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${NEXTCLOUD_PORT}:80"
+    volumes:
+      - snbd-nextcloud-data:/var/www/html
+
+volumes:
+  snbd-nextcloud-data:
+    name: snbd-nextcloud-data

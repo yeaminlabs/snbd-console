@@ -1,0 +1,15 @@
+{
+  "id": "claude",
+  "name": "Claude Code",
+  "tag": "AI coding agent",
+  "desc": "Anthropic's AI coding assistant in an isolated container with a persistent workspace.",
+  "version": "latest",
+  "type": "compose",
+  "installDir": "/opt/snbd/apps/claude",
+  "containerName": "snbd-claude",
+  "check": "docker ps --format '{{.Names}}' | grep -qx snbd-claude",
+  "postInstall": {
+    "note": "Claude Code container is running. Click Terminal to open a shell, then run: claude  to sign in with your Anthropic account."
+  },
+  "form": []
+}

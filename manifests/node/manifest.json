@@ -1,0 +1,15 @@
+{
+  "id": "node",
+  "name": "Node.js 22",
+  "tag": "Runtime",
+  "desc": "Node.js 22 LTS in an isolated container with a persistent workspace.",
+  "version": "22",
+  "type": "compose",
+  "installDir": "/opt/snbd/apps/node",
+  "containerName": "snbd-node",
+  "check": "docker ps --format '{{.Names}}' | grep -qx snbd-node",
+  "postInstall": {
+    "note": "Node.js container is running. Click the Terminal button to open a shell inside the container."
+  },
+  "form": []
+}

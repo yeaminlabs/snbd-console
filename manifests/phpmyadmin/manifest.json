@@ -1,0 +1,19 @@
+{
+  "id": "phpmyadmin",
+  "name": "phpMyAdmin",
+  "tag": "DevTool",
+  "desc": "Web-based MySQL/MariaDB administration interface.",
+  "version": "latest",
+  "type": "compose",
+  "installDir": "/opt/snbd/apps/phpmyadmin",
+  "containerName": "snbd-phpmyadmin",
+  "check": "docker ps --format '{{.Names}}' | grep -qx snbd-phpmyadmin",
+  "postInstall": {
+    "note": "phpMyAdmin is running at http://127.0.0.1:${PMA_PORT} (use SSH tunnel). Connect to any MySQL/MariaDB host from the login screen."
+  },
+  "form": [
+    { "key": "PMA_PORT", "label": "HTTP port", "type": "number", "default": "8081", "required": true },
+    { "key": "PMA_HOST", "label": "Default MySQL host", "type": "text", "default": "localhost", "required": false, "hint": "Hostname or IP of the MySQL server to connect to by default." },
+    { "key": "PMA_DB_PORT", "label": "MySQL port", "type": "number", "default": "3306", "required": false }
+  ]
+}

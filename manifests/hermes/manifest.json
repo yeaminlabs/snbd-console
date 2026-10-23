@@ -1,0 +1,12 @@
+{
+  "id": "hermes",
+  "name": "Hermes Agent",
+  "tag": "AI agent",
+  "desc": "Self-hosted agent with tools and memory.",
+  "version": "latest",
+  "type": "script",
+  "check": "[ -x /root/.local/bin/hermes ] || command -v hermes",
+  "postInstall": {
+    "note": "Hermes is installed at ~/.local/bin/hermes. Run 'hermes' to start."
+  }
+}

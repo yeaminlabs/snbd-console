@@ -1,0 +1,24 @@
+services:
+  snbd-claude:
+    image: node:22-alpine
+    container_name: snbd-claude
+    restart: unless-stopped
+    working_dir: /workspace
+    volumes:
+      - snbd-claude-workspace:/workspace
+      - snbd-claude-config:/root/.claude
+    environment:
+      - NPM_CONFIG_PREFIX=/workspace/.npm-global
+    command:
+      - sh
+      - -c
+      - |
+        export PATH=/workspace/.npm-global/bin:$$PATH
+        command -v claude 2>/dev/null || npm install -g @anthropic-ai/claude-code
+        exec tail -f /dev/null
+
+volumes:
+  snbd-claude-workspace:
+    name: snbd-claude-workspace
+  snbd-claude-config:
+    name: snbd-claude-config
