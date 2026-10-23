@@ -22,7 +22,10 @@ export function Login({ onSignedIn }: { onSignedIn: (m: Me) => void }) {
   return (
     <main style={{ display: 'grid', placeItems: 'center', minHeight: '100vh', padding: 24 }}>
       <form className="card" style={{ width: '100%', maxWidth: 400, padding: 32 }} onSubmit={submit}>
-        <div className="brand" style={{ marginBottom: 4 }}>SNBD <span style={{ color: 'var(--ink)', fontWeight: 600 }}>Console</span></div>
+        <div className="brand-mark" style={{ marginBottom: 4 }}>
+          <span className="brand">S</span>
+          <span style={{ fontWeight: 700, fontSize: 17 }}>SNBD <span style={{ color: 'var(--ink-2)', fontWeight: 600 }}>Console</span></span>
+        </div>
         <h1 style={{ fontSize: 28, margin: '12px 0 24px' }}>Sign in</h1>
         <div className="field"><label htmlFor="email">Email</label><input id="email" name="email" type="email" autoComplete="username" required /></div>
         <div className="field"><label htmlFor="password">Password</label><input id="password" name="password" type="password" autoComplete="current-password" required /></div>

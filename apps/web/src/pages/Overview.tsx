@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api, type Metrics, type Server } from '../api';
 import { ServerHeader } from '../components/ServerHeader';
+import { Badge } from '../components/Badge';
+import { IconBot } from '../components/Icons';
 import { ago, gb, planLabel, uptimeLabel } from '../format';
 
 function Stat({ label, value, unit }: { label: string; value: string; unit?: string }) {
@@ -60,25 +62,42 @@ export function Overview({ serverId }: { serverId: string }) {
           <section className="card pad-lg" aria-labelledby="cpu-h">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
               <h2 id="cpu-h" className="card-title">CPU usage · last 24 hours</h2>
-              <div className="muted">{latest ? `Now ${Math.round(latest.cpu)}%` : 'No data yet'}</div>
+              {latest && server?.agentConnected && <div className="muted">Now {Math.round(latest.cpu)}%</div>}
             </div>
-            <div className="chart" role="img" aria-label={latest ? `Hourly average CPU over the last 24 hours, now ${Math.round(latest.cpu)} percent` : 'No CPU data yet'}>
-              {points.map((p) => (
-                <div
-                  key={p.t}
-                  className={p.cpu == null ? 'gap' : ''}
-                  style={{ height: p.cpu == null ? 3 : `${Math.max(3, (p.cpu / peak) * 100)}%` }}
-                  title={`${new Date(p.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · ${p.cpu == null ? 'no data' : Math.round(p.cpu) + '%'}`}
-                />
-              ))}
-            </div>
-            <div className="chart-axis muted"><span>24 h ago</span><span>Now</span></div>
-            <div className="statgrid">
-              <Stat label="RAM" value={latest ? gb(latest.memUsed) : '—'} unit={latest ? `/ ${gb(latest.memTotal)} GB` : ''} />
-              <Stat label="Disk" value={latest ? gb(latest.diskUsed) : '—'} unit={latest ? `/ ${gb(latest.diskTotal)} GB` : ''} />
-              <Stat label="Uptime" value={upN} unit={upU} />
-              <Stat label="Last reading" value={latest ? ago(latest.at).replace(' ago', '') : '—'} unit={latest ? 'ago' : ''} />
-            </div>
+            {!server ? (
+              <>
+                <div className="skeleton skeleton-chart" />
+                <div className="statgrid">
+                  {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton skeleton-line" style={{ marginTop: 20 }} />)}
+                </div>
+              </>
+            ) : !server.agentConnected ? (
+              <div className="empty-state">
+                <IconBot />
+                <b>Can't reach this server's agent</b>
+                <span>Last heartbeat {ago(server.last_seen_at)}. Metrics resume once it reconnects.</span>
+              </div>
+            ) : (
+              <>
+                <div className="chart" role="img" aria-label={latest ? `Hourly average CPU over the last 24 hours, now ${Math.round(latest.cpu)} percent` : 'No CPU data yet'}>
+                  {points.map((p) => (
+                    <div
+                      key={p.t}
+                      className={p.cpu == null ? 'gap' : ''}
+                      style={{ height: p.cpu == null ? 3 : `${Math.max(3, (p.cpu / peak) * 100)}%` }}
+                      title={`${new Date(p.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · ${p.cpu == null ? 'no data' : Math.round(p.cpu) + '%'}`}
+                    />
+                  ))}
+                </div>
+                <div className="chart-axis muted"><span>24 h ago</span><span>Now</span></div>
+                <div className="statgrid">
+                  <Stat label="RAM" value={latest ? gb(latest.memUsed) : '—'} unit={latest ? `/ ${gb(latest.memTotal)} GB` : ''} />
+                  <Stat label="Disk" value={latest ? gb(latest.diskUsed) : '—'} unit={latest ? `/ ${gb(latest.diskTotal)} GB` : ''} />
+                  <Stat label="Uptime" value={upN} unit={upU} />
+                  <Stat label="Last reading" value={latest ? ago(latest.at).replace(' ago', '') : '—'} unit={latest ? 'ago' : ''} />
+                </div>
+              </>
+            )}
           </section>
           <section className="card pad-lg" aria-labelledby="qa-h">
             <h2 id="qa-h" className="card-title">Quick actions</h2>
@@ -121,7 +140,7 @@ export function Overview({ serverId }: { serverId: string }) {
           <section className="card pad-lg" aria-labelledby="ag-h">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h2 id="ag-h" className="card-title">Panel agent</h2>
-              <span className={`badge ${server?.agentConnected ? 'ok' : 'off'}`}>{server?.agentConnected ? 'Connected' : 'Offline'}</span>
+              <Badge cls={server?.agentConnected ? 'ok' : 'off'}>{server?.agentConnected ? 'Connected' : 'Offline'}</Badge>
             </div>
             <Kv k="Version"><span className="mono">{server?.agent_version ?? '—'}</span></Kv>
             <Kv k="Last heartbeat">{ago(server?.last_seen_at)}</Kv>

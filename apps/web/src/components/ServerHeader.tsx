@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api, type Server } from '../api';
+import { Badge } from './Badge';
 import { sourceLabel, statusOf } from '../format';
 
 type Tab = 'overview' | 'terminal' | 'files' | 'apps' | 'reinstall' | 'ai';
@@ -53,13 +54,13 @@ export function ServerHeader({ server, tab, onChanged }: { server: Server | null
       <div className="head-row">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <h1>{server?.name ?? '…'}</h1>
-          {server && <><span className={`badge ${statusCls}`}>{status}</span><span className={`badge ${sourceCls}`}>{source}</span></>}
+          {server && <><Badge cls={statusCls}>{status}</Badge><Badge cls={sourceCls}>{source}</Badge></>}
         </div>
         {tab === 'overview' && server && (
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-            <a className="btn" href={`#/servers/${id}/terminal`} aria-disabled={!server.agentConnected}>Open terminal</a>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            {server.capabilities?.rebuild && !server.suspended_at && <a className="btn danger" href={`#/servers/${id}/reinstall`}>Reinstall OS</a>}
             {server.capabilities?.power && !server.suspended_at && <PowerMenu server={server} onChanged={onChanged} />}
-            {server.capabilities?.rebuild && !server.suspended_at && <a className="btn p" href={`#/servers/${id}/reinstall`}>Reinstall OS</a>}
+            <a className="btn p" href={`#/servers/${id}/terminal`} aria-disabled={!server.agentConnected}>Open terminal</a>
           </div>
         )}
       </div>
@@ -68,7 +69,7 @@ export function ServerHeader({ server, tab, onChanged }: { server: Server | null
           <a key={key} href={href} className={tab === key ? 'on' : ''} aria-current={tab === key ? 'page' : undefined}>{label}</a>
         ))}
         {['Backups', 'Settings'].map((l) => (
-          <span key={l} className="tab-disabled" aria-disabled="true">{l}</span>
+          <span key={l} className="tab-disabled" aria-disabled="true" title={`${l} — coming soon`}>{l}<span className="soon">Soon</span></span>
         ))}
       </nav>
     </>

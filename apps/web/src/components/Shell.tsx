@@ -3,17 +3,22 @@ import { api, type Me } from '../api';
 import { IconBot, IconActivity, IconBackup, IconKey, IconReceipt, IconServers, IconSupport } from './Icons';
 
 const soon = (label: string, icon: ReactNode) => (
-  <span className="nav-item disabled" aria-disabled="true">{icon}{label}<span className="soon">Soon</span></span>
+  <span className="nav-item disabled" aria-disabled="true" title={`${label} — coming soon`}>{icon}{label}<span className="soon">Soon</span></span>
 );
 
 export function Shell({ me, onSignedOut, children, active = 'servers' }: { me: Me; onSignedOut: () => void; children: ReactNode; active?: 'servers' | 'activity' | 'agents' }) {
   return (
     <>
       <header className="top">
-        <span className="brand">SNBD</span>
-        <span style={{ fontWeight: 600, fontSize: 18 }}>Console</span>
+        <a href="#/" className="brand-mark">
+          <span className="brand">S</span>
+          <span className="product-name">SNBD Console</span>
+        </a>
         <span className="grow" />
-        <span className="muted">{me.name}</span>
+        <div className="account">
+          <span className="avatar" aria-hidden="true">{me.name.slice(0, 1).toUpperCase()}</span>
+          <span className="muted" style={{ fontSize: 13.5 }}>{me.name}</span>
+        </div>
         <button className="btn" onClick={() => api.logout().then(onSignedOut)}>Sign out</button>
       </header>
       <div className="layout">

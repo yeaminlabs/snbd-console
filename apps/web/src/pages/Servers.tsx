@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, type ActivityItem, type ImportResult, type Server } from '../api';
 import { IconCopy } from '../components/Icons';
+import { Badge } from '../components/Badge';
 import { planLabel, sourceLabel, statusOf, ago } from '../format';
 
 const activityLabel: Record<string, string> = {
@@ -96,7 +97,7 @@ export function Servers() {
             {servers ? `${servers.length} ${servers.length === 1 ? 'server' : 'servers'}${sources.size ? ' across ' + [...sources].join(' and ') : ''}` : 'Loading…'}
           </div>
         </div>
-        <a className="btn" href="#connect" onClick={(e) => { e.preventDefault(); document.getElementById('srv-name')?.focus(); document.getElementById('connect')?.scrollIntoView({ behavior: 'smooth' }); }}>Connect existing VPS</a>
+        <a className="btn p" href="#connect" onClick={(e) => { e.preventDefault(); document.getElementById('srv-name')?.focus(); document.getElementById('connect')?.scrollIntoView({ behavior: 'smooth' }); }}>Connect existing VPS</a>
       </div>
       {error && <p className="error">{error}</p>}
 
@@ -112,6 +113,16 @@ export function Servers() {
           <div style={{ overflowX: 'auto' }}>
             <div style={{ minWidth: 860 }}>
               <div className="srow th" style={{ borderTop: 0 }}><div>Server</div><div>Source</div><div>Plan</div><div>System</div><div>Status</div><div>CPU</div></div>
+              {servers === null && [0, 1, 2].map((i) => (
+                <div className="srow" key={i} aria-hidden="true">
+                  <div className="skeleton skeleton-line" style={{ height: 14 }} />
+                  <div className="skeleton skeleton-line" style={{ width: '60%', height: 20, borderRadius: 999 }} />
+                  <div className="skeleton skeleton-line" style={{ width: '50%', height: 14 }} />
+                  <div className="skeleton skeleton-line" style={{ width: '70%', height: 14 }} />
+                  <div className="skeleton skeleton-line" style={{ width: '50%', height: 20, borderRadius: 999 }} />
+                  <div className="skeleton skeleton-line" style={{ width: '80%', height: 6 }} />
+                </div>
+              ))}
               {servers?.map((s) => {
                 const [label, cls] = statusOf(s);
                 const [src, srcCls] = sourceLabel(s);
@@ -122,10 +133,10 @@ export function Servers() {
                       <a href={`#/servers/${s.id}`} style={{ fontWeight: 600, color: 'var(--ink)', textDecoration: 'none' }}>{s.name}</a>
                       <div className="mono muted" style={{ fontSize: 12 }}>{s.ip ?? 'no IP yet'}</div>
                     </div>
-                    <div><span className={`badge ${srcCls}`}>{src}</span></div>
+                    <div><Badge cls={srcCls}>{src}</Badge></div>
                     <div className="muted">{planLabel(s.plan)}</div>
                     <div className="muted">{s.os ?? '—'}</div>
-                    <div><span className={`badge ${cls}`}>{label}</span></div>
+                    <div><Badge cls={cls}>{label}</Badge></div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div className="bar"><div style={{ width: `${cpu}%` }} /></div>
                       <span className="muted" style={{ fontSize: 12, width: 32 }}>{s.cpu == null ? '—' : `${cpu}%`}</span>
@@ -135,7 +146,12 @@ export function Servers() {
               })}
             </div>
           </div>
-          {servers?.length === 0 && <p className="muted" style={{ padding: 20, margin: 0 }}>No servers yet. Connect an existing VPS to get started.</p>}
+          {servers?.length === 0 && (
+            <div className="empty-state" style={{ height: 'auto', padding: '32px 20px', margin: 0, border: 0 }}>
+              <b>No servers yet</b>
+              <span>Connect an existing VPS to get started.</span>
+            </div>
+          )}
         </div>
         <div className="side-col">
           <ConnectCard onCreated={load} />

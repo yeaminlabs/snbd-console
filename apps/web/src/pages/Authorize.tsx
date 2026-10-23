@@ -21,7 +21,10 @@ export function Authorize({ id }: { id: string }) {
   return (
     <main style={{ display: 'grid', placeItems: 'center', minHeight: '100vh', padding: 24 }}>
       <section className="card" style={{ width: '100%', maxWidth: 520, padding: 32 }} aria-labelledby="auth-h">
-        <div className="brand" style={{ marginBottom: 4 }}>SNBD <span style={{ color: 'var(--ink)', fontWeight: 600 }}>Console</span></div>
+        <div className="brand-mark" style={{ marginBottom: 4 }}>
+          <span className="brand">S</span>
+          <span style={{ fontWeight: 700, fontSize: 17 }}>SNBD <span style={{ color: 'var(--ink-2)', fontWeight: 600 }}>Console</span></span>
+        </div>
         {error && <p className="error" role="alert" style={{ marginTop: 16 }}>{error}</p>}
         {!info && !error && <p className="muted">Loading…</p>}
         {info && (
