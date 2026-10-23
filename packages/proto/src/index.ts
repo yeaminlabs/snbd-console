@@ -19,8 +19,18 @@ export const AgentTermExit = z.object({ type: z.literal('term.exit'), sid: z.str
 export const AgentRpcResult = z.object({ type: z.literal('rpc.result'), id: z.string(), ok: z.boolean(), data: z.unknown().optional(), error: z.string().optional() });
 export const AgentJobLog = z.object({ type: z.literal('job.log'), jobId: z.string(), data: z.string() });
 export const AgentJobDone = z.object({ type: z.literal('job.done'), jobId: z.string(), code: z.number().int() });
+// sent once right after "ready" (and again after a provider resize changes the hardware underneath):
+// lets the panel fill in OS/vCPU/RAM/disk for servers it didn't provision itself (e.g. imported ones).
+export const AgentSysinfo = z.object({
+  type: z.literal('sysinfo'),
+  os: z.string().max(120).optional(),
+  arch: z.string().max(40).optional(),
+  vcpu: z.number().int().positive().optional(),
+  ramTotal: z.number().positive().optional(),
+  diskTotal: z.number().positive().optional(),
+});
 
-export const AgentMessage = z.discriminatedUnion('type', [AgentHello, AgentAuth, AgentHeartbeat, AgentTermOut, AgentTermExit, AgentRpcResult, AgentJobLog, AgentJobDone]);
+export const AgentMessage = z.discriminatedUnion('type', [AgentHello, AgentAuth, AgentHeartbeat, AgentTermOut, AgentTermExit, AgentRpcResult, AgentJobLog, AgentJobDone, AgentSysinfo]);
 export type AgentMessage = z.infer<typeof AgentMessage>;
 
 // panel -> agent (the agent is Go, so these are documented here and mirrored in agent/proto.go)

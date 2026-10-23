@@ -260,6 +260,8 @@ app.get('/agent', { websocket: true, ...ipLimit(300) }, (socket, req) => {
     await pool.query(`update servers set status = 'running', reinstall_started_at = null where id = $1 and status in ('provisioning', 'agent_offline', 'stopped')`, [serverId]);
     await pool.query('update servers set reinstall_started_at = null where id = $1', [serverId]);
     await pool.query('update servers set last_seen_ip = $2::inet where id = $1', [serverId, ip]).catch(() => {});
+    // an imported server has no provider-reported address; the IP it actually dials in from is the real one
+    await pool.query('update servers set ip = $2::inet where id = $1 and ip is null', [serverId, ip]).catch(() => {});
     await audit(null, serverId, 'agent.connected');
     send(socket, { type: 'ready' });
     await pool.query('update servers set offline_since = null where id = $1', [serverId]);
@@ -310,6 +312,24 @@ app.get('/agent', { websocket: true, ...ipLimit(300) }, (socket, req) => {
               [conn.serverId, msg.cpu, msg.memUsed, msg.memTotal, msg.diskUsed, msg.diskTotal, msg.uptime],
             );
           }
+          break;
+        }
+        case 'sysinfo': {
+          // os always refreshes (a manual reinstall changes it); vcpu/ramGb/diskGb only fill gaps so a
+          // provider-provisioned plan (the authoritative, billed spec) is never overwritten by a measurement.
+          const ramGb = msg.ramTotal ? msg.ramTotal / 1024 ** 3 : null;
+          const diskGb = msg.diskTotal ? msg.diskTotal / 1024 ** 3 : null;
+          await pool.query(
+            `update servers set
+               os = coalesce($2, os),
+               plan = plan || jsonb_strip_nulls(jsonb_build_object(
+                 'vcpu', case when plan ? 'vcpu' then null else $3::int end,
+                 'ramGb', case when plan ? 'ramGb' then null else $4::numeric end,
+                 'diskGb', case when plan ? 'diskGb' then null else $5::numeric end
+               ))
+             where id = $1`,
+            [conn.serverId, msg.os || null, msg.vcpu ?? null, ramGb, diskGb],
+          );
           break;
         }
         case 'term.out': {

@@ -108,6 +108,9 @@ func run(panelURL, stateDir, token string) error {
 			dropTokenFromEnvFile(os.Getenv("SNBD_ENV_FILE"))
 		case "ready":
 			log.Printf("connected to panel")
+			if err := send(collectSysinfo()); err != nil {
+				log.Printf("sysinfo: %v", err)
+			}
 			go heartbeats(send, done)
 		case "error":
 			if st != nil && m.Message == "Bad credentials" {

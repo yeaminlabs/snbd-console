@@ -44,6 +44,15 @@ type heartbeat struct {
 	Uptime    uint64  `json:"uptime"`
 }
 
+type sysinfo struct {
+	Type      string `json:"type"`
+	OS        string `json:"os,omitempty"`
+	Arch      string `json:"arch,omitempty"`
+	VCPU      int    `json:"vcpu,omitempty"`
+	RAMTotal  uint64 `json:"ramTotal,omitempty"`
+	DiskTotal uint64 `json:"diskTotal,omitempty"`
+}
+
 type termOut struct {
 	Type string `json:"type"`
 	Sid  string `json:"sid"`
