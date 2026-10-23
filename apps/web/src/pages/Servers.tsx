@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, type ActivityItem, type ImportResult, type Server } from '../api';
-import { IconCopy } from '../components/Icons';
+import { IconChevronRight, IconCopy } from '../components/Icons';
 import { Badge } from '../components/Badge';
+import { Modal } from '../components/Modal';
 import { planLabel, sourceLabel, statusOf, ago } from '../format';
 
 const activityLabel: Record<string, string> = {
@@ -10,7 +11,7 @@ const activityLabel: Record<string, string> = {
   'terminal.open': 'Terminal opened',
 };
 
-function ConnectCard({ onCreated }: { onCreated: () => void }) {
+function ConnectModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -42,13 +43,12 @@ function ConnectCard({ onCreated }: { onCreated: () => void }) {
   }
 
   return (
-    <section className="card pad" id="connect" aria-labelledby="connect-h">
-      <h2 id="connect-h" className="card-title">Connect an existing VPS</h2>
-      <p className="muted" style={{ margin: '8px 0 12px' }}>Run this once as root on any Linux server to link it to your panel.</p>
+    <Modal titleId="connect-h" title="Connect an existing VPS" onClose={onClose}>
+      <p className="muted" style={{ margin: '8px 0 16px' }}>Run this once as root on any Linux server to link it to your panel.</p>
       {result ? (
         <>
           <div className="codebox mono" tabIndex={0}>{command}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
             <button className="btn" onClick={copy}><IconCopy />{copied ? 'Copied' : 'Copy'}</button>
             <span className="muted" style={{ fontSize: 12 }}>One-time token, expires in {result.expiresInMinutes} minutes.</span>
           </div>
@@ -58,13 +58,13 @@ function ConnectCard({ onCreated }: { onCreated: () => void }) {
         <form onSubmit={submit}>
           <div className="field" style={{ marginBottom: 12 }}>
             <label htmlFor="srv-name">Server name</label>
-            <input id="srv-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. legacy-site" maxLength={60} required />
+            <input id="srv-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. legacy-site" maxLength={60} required autoFocus />
           </div>
           {error && <p className="error" role="alert">{error}</p>}
           <button className="btn p" disabled={busy || !name.trim()}>{busy ? 'Creating…' : 'Generate command'}</button>
         </form>
       )}
-    </section>
+    </Modal>
   );
 }
 
@@ -72,6 +72,7 @@ export function Servers() {
   const [servers, setServers] = useState<Server[] | null>(null);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [error, setError] = useState('');
+  const [connecting, setConnecting] = useState(false);
 
   const load = () => {
     api.servers().then(setServers).catch((e) => setError(e.message));
@@ -97,9 +98,10 @@ export function Servers() {
             {servers ? `${servers.length} ${servers.length === 1 ? 'server' : 'servers'}${sources.size ? ' across ' + [...sources].join(' and ') : ''}` : 'Loading…'}
           </div>
         </div>
-        <a className="btn p" href="#connect" onClick={(e) => { e.preventDefault(); document.getElementById('srv-name')?.focus(); document.getElementById('connect')?.scrollIntoView({ behavior: 'smooth' }); }}>Connect existing VPS</a>
+        <button className="btn p" onClick={() => setConnecting(true)}>Connect existing VPS</button>
       </div>
       {error && <p className="error">{error}</p>}
+      {connecting && <ConnectModal onClose={() => setConnecting(false)} onCreated={load} />}
 
       <div className="stats">
         <div className="card pad"><div className="th">Running</div><div className="stat">{count('running')}</div></div>
@@ -128,20 +130,23 @@ export function Servers() {
                 const [src, srcCls] = sourceLabel(s);
                 const cpu = Math.round(s.cpu ?? 0);
                 return (
-                  <div className="srow" key={s.id}>
+                  <a className="srow" key={s.id} href={`#/servers/${s.id}`}>
                     <div>
-                      <a href={`#/servers/${s.id}`} style={{ fontWeight: 600, color: 'var(--ink)', textDecoration: 'none' }}>{s.name}</a>
+                      <div className="name">{s.name}</div>
                       <div className="mono muted" style={{ fontSize: 12 }}>{s.ip ?? 'no IP yet'}</div>
                     </div>
                     <div><Badge cls={srcCls}>{src}</Badge></div>
                     <div className="muted">{planLabel(s.plan)}</div>
                     <div className="muted">{s.os ?? '—'}</div>
                     <div><Badge cls={cls}>{label}</Badge></div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div className="bar"><div style={{ width: `${cpu}%` }} /></div>
-                      <span className="muted" style={{ fontSize: 12, width: 32 }}>{s.cpu == null ? '—' : `${cpu}%`}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+                        <div className="bar"><div style={{ width: `${cpu}%` }} /></div>
+                        <span className="muted" style={{ fontSize: 12, width: 32 }}>{s.cpu == null ? '—' : `${cpu}%`}</span>
+                      </div>
+                      <IconChevronRight className="chev" />
                     </div>
-                  </div>
+                  </a>
                 );
               })}
             </div>
@@ -150,11 +155,11 @@ export function Servers() {
             <div className="empty-state" style={{ height: 'auto', padding: '32px 20px', margin: 0, border: 0 }}>
               <b>No servers yet</b>
               <span>Connect an existing VPS to get started.</span>
+              <button className="btn p" style={{ marginTop: 4 }} onClick={() => setConnecting(true)}>Connect existing VPS</button>
             </div>
           )}
         </div>
         <div className="side-col">
-          <ConnectCard onCreated={load} />
           <section className="card pad" aria-labelledby="act-h">
             <h2 id="act-h" className="card-title" style={{ marginBottom: 12 }}>Recent activity</h2>
             {activity.length === 0 && <p className="muted" style={{ margin: 0 }}>Nothing yet.</p>}
