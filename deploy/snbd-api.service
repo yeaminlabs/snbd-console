@@ -2,6 +2,13 @@
 Description=SNBD Console API
 After=network-online.target postgresql.service
 Wants=network-online.target
+# A crash-restart loop (e.g. Postgres bouncing during routine OS package updates) must not burn through
+# systemd's default 5-tries-in-10s budget and get stuck "failed" waiting for someone to notice and run
+# `systemctl start` by hand. Give it a much bigger budget before giving up, and page out the moment it
+# actually does give up.
+StartLimitIntervalSec=120
+StartLimitBurst=20
+OnFailure=snbd-api-alert.service
 
 [Service]
 User=snbd

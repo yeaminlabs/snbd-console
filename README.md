@@ -144,6 +144,8 @@ Choose a deployment guide:
 
 The systemd files, Caddy example, and production environment template are in `deploy/`. `scripts/install-production.sh --help` lists installer options; `--dry-run` previews its changes. Serve the panel over HTTPS, proxy WebSockets, and allow the required upload size. OAuth connectors also need `/.well-known/oauth-*` discovery routes to reach the API; see the nginx example in the Docker guide.
 
+**Resilience:** the API tolerates the Postgres connection dropping and reconnecting (a `pool.on('error')` handler, since Node otherwise treats an unhandled pool error as fatal) - this is what a routine `apt` security update restarting Postgres looks like to the app, and it used to crash the process every time. `snbd-api.service` also gets a generous restart budget (`StartLimitBurst=20` over `StartLimitIntervalSec=120`) so a burst of real failures doesn't leave the unit stuck "failed" waiting for someone to notice; `OnFailure=snbd-api-alert.service` posts to `ALERT_WEBHOOK_URL` if it ever does give up.
+
 Create a production customer without demo data using:
 
 ```bash

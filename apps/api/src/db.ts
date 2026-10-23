@@ -4,7 +4,21 @@ import { promisify } from 'node:util';
 
 const scrypt = promisify(scryptCb) as (pw: string, salt: Buffer, len: number) => Promise<Buffer>;
 
-export const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+export const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 10,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 10_000,
+  keepAlive: true,
+});
+// node-postgres emits "error" on the pool whenever an IDLE client's connection dies underneath it
+// (a Postgres restart, a dropped network connection, `pg_terminate_backend`, a backend restart from
+// routine OS package updates, ...). That client is simply discarded and a fresh one is opened on the
+// next query - but an EventEmitter "error" with no listener is fatal in Node, so without this handler
+// the entire API process crashes. This single line is the fix for that whole class of outage.
+pool.on('error', (err) => {
+  console.error('idle Postgres client error (pool will reconnect on next query):', err);
+});
 
 export const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 export const randomToken = (bytes = 32) => randomBytes(bytes).toString('hex');

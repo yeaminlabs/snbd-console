@@ -37,6 +37,20 @@ function trustProxySetting(): boolean | string {
 }
 const webDist = join(import.meta.dirname, '..', '..', 'web', 'dist');
 const app = Fastify({ logger: { level: 'info' }, trustProxy: trustProxySetting() });
+
+// Defense in depth against the whole process going down. A rejected promise nobody awaited is
+// almost always isolated (one request, one background task) - log it and keep serving everything
+// else. A truly uncaught *synchronous* exception means some code ran off the rails in a way no
+// try/catch here anticipated; Node's own docs say continuing after that is unsafe, so log it and
+// exit - systemd's Restart=always brings a fresh, known-good process back in ~3 seconds either way.
+process.on('unhandledRejection', (reason) => {
+  app.log.error(reason, 'unhandled promise rejection (continuing)');
+});
+process.on('uncaughtException', (err) => {
+  app.log.fatal(err, 'uncaught exception, exiting for a clean restart');
+  process.exit(1);
+});
+
 await app.register(cookie);
 await registerHardening(app);
 await app.register(websocket, { options: { maxPayload: 4 * 1024 * 1024 } });

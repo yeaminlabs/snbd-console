@@ -1,0 +1,10 @@
+[Unit]
+Description=Notify the configured webhook that snbd-api failed
+
+[Service]
+Type=oneshot
+# EnvironmentFile prefixed with "-": fine if it's missing, just means ALERT_WEBHOOK_URL stays unset
+EnvironmentFile=-/etc/snbd-console.env
+ExecStart=/bin/sh -c '[ -n "$ALERT_WEBHOOK_URL" ] && curl -fsS --max-time 10 -X POST -H "content-type: application/json" \
+  -d "{\"text\":\"\\ud83d\\udd34 snbd-api failed on $(hostname). Check: systemctl status snbd-api\",\"content\":\"\\ud83d\\udd34 snbd-api failed on $(hostname). Check: systemctl status snbd-api\",\"event\":\"api.failed\"}" \
+  "$ALERT_WEBHOOK_URL" || true'

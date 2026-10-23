@@ -229,6 +229,7 @@ fi
 # ---------------------------------------------------------------- services
 step "Services (systemd)"
 install -m 0644 "$APP_DIR/deploy/snbd-api.service" /etc/systemd/system/snbd-api.service
+install -m 0644 "$APP_DIR/deploy/snbd-api-alert.service" /etc/systemd/system/snbd-api-alert.service
 install -m 0644 "$APP_DIR/deploy/snbd-backup.service" /etc/systemd/system/snbd-backup.service
 install -m 0644 "$APP_DIR/deploy/snbd-backup.timer" /etc/systemd/system/snbd-backup.timer
 mkdir -p "$BACKUP_DIR" && chown "$SVC_USER":"$SVC_USER" "$BACKUP_DIR" && chmod 700 "$BACKUP_DIR"
