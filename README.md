@@ -111,7 +111,7 @@ Local API development, migration, seed, and client-creation commands read the ro
 | `NODE_ENV` | Set to `production` for production validation, secure cookies, and serving the built frontend. |
 | `TRUST_PROXY` | Trusted reverse proxy IPs/CIDRs. Match the actual proxy; production examples bind the API to localhost or a private container network. |
 | `WHMCS_WEBHOOK_SECRET` | Shared WHMCS signing secret, at least 32 characters when configured. Leave empty to keep the integration disabled. |
-| `WHMCS_API_URL`, `WHMCS_API_IDENTIFIER`, `WHMCS_API_SECRET`, `WHMCS_VPS_GROUP_ID` | Lets clients order a VPS from the dashboard: the panel reads live products/pricing from WHMCS (Setup > API Credentials) and "Order" hands off to its cart to pay. All four are required together; leave any unset to hide VPS ordering. |
+| `WHMCS_API_URL`, `WHMCS_API_IDENTIFIER`, `WHMCS_API_SECRET`, `WHMCS_VPS_GROUP_IDS` | Lets clients order a VPS from the dashboard: the panel reads live products/pricing from WHMCS (Setup > API Credentials) and "Order" hands off to its cart to pay. `WHMCS_VPS_GROUP_IDS` is a comma-separated list of Product Group IDs (one per VPS region/plan group). All four are required together; leave any unset to hide VPS ordering. |
 | `HETZNER_API_TOKEN` | Read/write Hetzner Cloud project token. Required for real Hetzner operations. |
 | `HETZNER_API_URL` | Optional provider URL override, used by the local mock. |
 | `WEB_URL` | Optional frontend address for SSO redirects and allowed browser origins. Defaults to the public panel URL for SSO. |
@@ -182,9 +182,9 @@ The module sends HMAC-signed requests to `POST /webhooks/whmcs` with timestamp a
 
 That webhook is WHMCS calling the panel after an order is paid. The other direction — a client ordering a *new* VPS from inside the panel — is read-only against the WHMCS API and never touches payment:
 
-1. Put every sellable VPS product into one WHMCS Product Group (Setup > Products/Services > Create/Manage Groups) and note its group ID.
-2. Generate an API credential (Setup > API Credentials) and set `WHMCS_API_URL` (e.g. `https://portal.snbdhost.com`), `WHMCS_API_IDENTIFIER`, `WHMCS_API_SECRET`, and `WHMCS_VPS_GROUP_ID` in the API's environment.
-3. The dashboard's **Order a new VPS** button calls `GET /api/vps-plans`, which fetches that group's products (name, description, live pricing) straight from `GetProducts` and returns one `orderUrl` per plan pointing at `WHMCS_API_URL/cart.php?a=add&pid=<id>`.
+1. Put every sellable VPS product into one or more WHMCS Product Groups (Setup > Products/Services > Create/Manage Groups) and note their group IDs.
+2. Generate an API credential (Setup > API Credentials; note that WHMCS lets you restrict a credential to specific IPs — if you do, allowlist the panel server's outbound IPv4 address) and set `WHMCS_API_URL` (e.g. `https://portal.snbdhost.com`), `WHMCS_API_IDENTIFIER`, `WHMCS_API_SECRET`, and `WHMCS_VPS_GROUP_IDS` (comma-separated, e.g. `4,6,17,18,20,22`) in the API's environment. The panel always calls WHMCS over IPv4, even on a dual-stack host, so a single IPv4 allowlist entry is enough.
+3. The dashboard's **Order a new VPS** button calls `GET /api/vps-plans`, which fetches every product in those groups (name, description, live pricing) from `GetProducts` and returns one `orderUrl` per plan pointing at `WHMCS_API_URL/cart.php?a=add&pid=<id>`.
 4. Clicking a plan opens that cart link in a new tab, where the client logs in/registers and pays on WHMCS with whatever gateways are already configured there. Once WHMCS activates the order, the existing `snbdpanel` module webhook provisions the server and it appears in the dashboard on its own.
 
 Changing the WHMCS address or group later is just an environment-variable edit and a restart — no code change or redeploy.

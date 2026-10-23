@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { Agent } from 'undici';
 import { clientFromRequest } from './session.js';
 
 // Reads VPS products straight from WHMCS (Setup > Products/Services) so the console never
@@ -8,18 +9,25 @@ import { clientFromRequest } from './session.js';
 //   WHMCS_API_URL          e.g. https://portal.snbdhost.com (no trailing slash)
 //   WHMCS_API_IDENTIFIER   Setup > API Credentials
 //   WHMCS_API_SECRET       Setup > API Credentials
-//   WHMCS_VPS_GROUP_ID     the Product Group ID that holds the VPS products
-// Changing the WHMCS address or group later is an .env edit + restart, no redeploy.
+//   WHMCS_VPS_GROUP_IDS    comma-separated Product Group IDs that hold VPS products, e.g. "4,6,17,18,20,22"
+// Changing the WHMCS address or groups later is an .env edit + restart, no redeploy.
 
-interface WhmcsConfig { url: string; identifier: string; secret: string; groupId: string }
+// WHMCS API credentials are commonly IP-allowlisted; pin to IPv4 so the call never silently
+// takes a different outbound address than the one that got whitelisted.
+const ipv4Only = new Agent({ connect: { family: 4 } });
+
+interface WhmcsConfig { url: string; identifier: string; secret: string; groupIds: Set<number> }
 
 function getConfig(): WhmcsConfig | null {
   const url = process.env.WHMCS_API_URL?.replace(/\/+$/, '');
   const identifier = process.env.WHMCS_API_IDENTIFIER;
   const secret = process.env.WHMCS_API_SECRET;
-  const groupId = process.env.WHMCS_VPS_GROUP_ID;
-  if (!url || !identifier || !secret || !groupId) return null;
-  return { url, identifier, secret, groupId };
+  const groupIds = (process.env.WHMCS_VPS_GROUP_IDS ?? '')
+    .split(',')
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isInteger(n) && n > 0);
+  if (!url || !identifier || !secret || groupIds.length === 0) return null;
+  return { url, identifier, secret, groupIds: new Set(groupIds) };
 }
 
 export interface VpsPlan {
@@ -33,7 +41,13 @@ export interface VpsPlan {
 
 async function callWhmcs(cfg: WhmcsConfig, action: string, params: Record<string, string> = {}): Promise<any> {
   const body = new URLSearchParams({ identifier: cfg.identifier, secret: cfg.secret, action, responsetype: 'json', ...params });
-  const res = await fetch(`${cfg.url}/includes/api.php`, { method: 'POST', body, signal: AbortSignal.timeout(10_000) });
+  const res = await fetch(`${cfg.url}/includes/api.php`, {
+    method: 'POST',
+    body,
+    signal: AbortSignal.timeout(10_000),
+    // @ts-expect-error -- undici-specific fetch option, not in the lib.dom.d.ts RequestInit type
+    dispatcher: ipv4Only,
+  });
   if (!res.ok) throw new Error(`WHMCS API HTTP ${res.status}`);
   const data = await res.json();
   if (data.result !== 'success') throw new Error(data.message || `WHMCS API error (${data.result})`);
@@ -58,11 +72,13 @@ function pickPrice(pricing: Record<string, Record<string, string>> | undefined):
 }
 
 async function fetchPlans(cfg: WhmcsConfig): Promise<VpsPlan[]> {
-  const data = await callWhmcs(cfg, 'GetProducts', { gid: cfg.groupId });
+  // WHMCS's `gid` filter only accepts one group; fetch the full catalog and filter here so any
+  // number of VPS region groups can be configured.
+  const data = await callWhmcs(cfg, 'GetProducts');
   const raw = data.products?.product ?? [];
   const list = Array.isArray(raw) ? raw : [raw];
   return list
-    .filter((p: any) => p && p.pid != null && p.hidden !== true && p.hidden !== '1')
+    .filter((p: any) => p && p.pid != null && cfg.groupIds.has(Number(p.gid)) && p.hidden !== true && p.hidden !== '1')
     .map((p: any) => {
       const picked = pickPrice(p.pricing);
       return {
