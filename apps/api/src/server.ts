@@ -23,6 +23,7 @@ import { registerTools } from './tools.js';
 import { registerTokens } from './tokens.js';
 import { registerMcp } from './mcp.js';
 import { registerOAuth } from './oauth.js';
+import { registerVpsPlans } from './vpsPlans.js';
 import { failPending, failRunningJobs, onJobDone, onJobLog, onRpcResult } from './agentRpc.js';
 
 const HEARTBEAT_STORE_EVERY_MS = 60_000;
@@ -58,6 +59,7 @@ registerTools(app);
 registerTokens(app);
 registerMcp(app);
 registerOAuth(app);
+registerVpsPlans(app);
 
 // ---- auth -----------------------------------------------------------------
 

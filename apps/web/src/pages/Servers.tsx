@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { api, type ActivityItem, type ImportResult, type Server } from '../api';
-import { IconChevronRight, IconCopy } from '../components/Icons';
+import { api, type ActivityItem, type ImportResult, type Server, type VpsPlan } from '../api';
+import { IconArrowUpRight, IconChevronRight, IconCopy } from '../components/Icons';
 import { Badge } from '../components/Badge';
 import { Modal } from '../components/Modal';
 import { planLabel, sourceLabel, statusOf, ago } from '../format';
@@ -68,11 +68,33 @@ function ConnectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   );
 }
 
+function OrderModal({ onClose, plans }: { onClose: () => void; plans: VpsPlan[] }) {
+  return (
+    <Modal titleId="order-h" title="Order a new VPS" onClose={onClose}>
+      <p className="muted" style={{ margin: '8px 0 16px' }}>Pricing and specs come straight from your billing system. Payment happens there too — this just opens the right plan in your cart.</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {plans.map((p) => (
+          <a key={p.id} className="plan-card" href={p.orderUrl} target="_blank" rel="noopener noreferrer">
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600 }}>{p.name}</div>
+              {p.description && <div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>{p.description}</div>}
+            </div>
+            {p.price && <div className="plan-price">{p.price}<span className="muted">{p.cycle}</span></div>}
+            <IconArrowUpRight className="chev" />
+          </a>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
 export function Servers() {
   const [servers, setServers] = useState<Server[] | null>(null);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [plans, setPlans] = useState<VpsPlan[]>([]);
   const [error, setError] = useState('');
   const [connecting, setConnecting] = useState(false);
+  const [ordering, setOrdering] = useState(false);
 
   const load = () => {
     api.servers().then(setServers).catch((e) => setError(e.message));
@@ -80,6 +102,7 @@ export function Servers() {
   };
   useEffect(() => {
     load();
+    api.vpsPlans().then((r) => setPlans(r.plans)).catch(() => setPlans([]));
     const t = setInterval(load, 5000);
     return () => clearInterval(t);
   }, []);
@@ -98,10 +121,14 @@ export function Servers() {
             {servers ? `${servers.length} ${servers.length === 1 ? 'server' : 'servers'}${sources.size ? ' across ' + [...sources].join(' and ') : ''}` : 'Loading…'}
           </div>
         </div>
-        <button className="btn p" onClick={() => setConnecting(true)}>Connect existing VPS</button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          {plans.length > 0 && <button className="btn" onClick={() => setOrdering(true)}>Order a new VPS</button>}
+          <button className="btn p" onClick={() => setConnecting(true)}>Connect existing VPS</button>
+        </div>
       </div>
       {error && <p className="error">{error}</p>}
       {connecting && <ConnectModal onClose={() => setConnecting(false)} onCreated={load} />}
+      {ordering && <OrderModal onClose={() => setOrdering(false)} plans={plans} />}
 
       <div className="stats">
         <div className="card pad"><div className="th">Running</div><div className="stat">{count('running')}</div></div>
@@ -154,8 +181,11 @@ export function Servers() {
           {servers?.length === 0 && (
             <div className="empty-state" style={{ height: 'auto', padding: '32px 20px', margin: 0, border: 0 }}>
               <b>No servers yet</b>
-              <span>Connect an existing VPS to get started.</span>
-              <button className="btn p" style={{ marginTop: 4 }} onClick={() => setConnecting(true)}>Connect existing VPS</button>
+              <span>Order a new VPS or connect one you already have.</span>
+              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                {plans.length > 0 && <button className="btn" onClick={() => setOrdering(true)}>Order a new VPS</button>}
+                <button className="btn p" onClick={() => setConnecting(true)}>Connect existing VPS</button>
+              </div>
             </div>
           )}
         </div>

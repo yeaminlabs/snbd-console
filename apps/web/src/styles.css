@@ -121,6 +121,13 @@ a.srow:focus-visible { outline: 2px solid var(--red); outline-offset: -2px; }
 .srow .chev { color: #c4c4c8; transition: transform .15s var(--ease), color .15s var(--ease); flex: 0 0 auto; }
 .srow:hover .chev { color: var(--muted); transform: translateX(2px); }
 
+/* VPS plan picker */
+.plan-card { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: var(--radius-sm); border: 1px solid var(--line); text-decoration: none; color: var(--ink); transition: border-color .12s var(--ease), background-color .12s var(--ease); }
+.plan-card:hover { background: var(--bg); border-color: #d4d4d8; }
+.plan-card:hover .chev { color: var(--muted); transform: translateX(2px); }
+.plan-price { text-align: right; font-weight: 600; white-space: nowrap; font-size: 14px; }
+.plan-price span { display: block; font-weight: 500; font-size: 11px; color: var(--muted); }
+
 /* modal */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(24,24,27,.45); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; animation: fade-in .15s var(--ease); }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }

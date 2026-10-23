@@ -35,6 +35,7 @@ export interface OAuthRequestInfo { clientName: string; returnsTo: string; serve
 export interface TokenInfo { kind: 'token' | 'connector'; id: string; name: string; prefix: string; scope: 'read' | 'deploy'; serverIds: string[] | null; serverNames: string[]; expiresAt: string | null; lastUsedAt: string | null; createdAt: string }
 export interface ActivityItem { id: number; action: string; at: string; server: string }
 export interface ImportResult { serverId: string; token: string; expiresInMinutes: number; panelUrl: string }
+export interface VpsPlan { id: number; name: string; description: string; price: string | null; cycle: string | null; orderUrl: string }
 
 async function json<T>(res: Response): Promise<T> {
   const body = await res.json().catch(() => ({}));
@@ -75,5 +76,6 @@ export const api = {
   oauthApprove: (id: string, serverIds: string[] | null) => post(`/api/oauth/request/${id}/approve`, { serverIds }).then(json<{ redirect: string }>),
   oauthDeny: (id: string) => post(`/api/oauth/request/${id}/deny`, {}).then(json<{ redirect: string }>),
   importServer: (name: string) => post('/api/servers/import', { name }).then(json<ImportResult>),
+  vpsPlans: () => fetch('/api/vps-plans').then(json<{ plans: VpsPlan[]; stale?: boolean }>),
   aiSession: (serverId: string) => post(`/api/servers/${serverId}/ai-session`, {}).then(json<{ token: string }>),
 };

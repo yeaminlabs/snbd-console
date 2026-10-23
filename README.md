@@ -111,6 +111,7 @@ Local API development, migration, seed, and client-creation commands read the ro
 | `NODE_ENV` | Set to `production` for production validation, secure cookies, and serving the built frontend. |
 | `TRUST_PROXY` | Trusted reverse proxy IPs/CIDRs. Match the actual proxy; production examples bind the API to localhost or a private container network. |
 | `WHMCS_WEBHOOK_SECRET` | Shared WHMCS signing secret, at least 32 characters when configured. Leave empty to keep the integration disabled. |
+| `WHMCS_API_URL`, `WHMCS_API_IDENTIFIER`, `WHMCS_API_SECRET`, `WHMCS_VPS_GROUP_ID` | Lets clients order a VPS from the dashboard: the panel reads live products/pricing from WHMCS (Setup > API Credentials) and "Order" hands off to its cart to pay. All four are required together; leave any unset to hide VPS ordering. |
 | `HETZNER_API_TOKEN` | Read/write Hetzner Cloud project token. Required for real Hetzner operations. |
 | `HETZNER_API_URL` | Optional provider URL override, used by the local mock. |
 | `WEB_URL` | Optional frontend address for SSO redirects and allowed browser origins. Defaults to the public panel URL for SSO. |
@@ -178,6 +179,15 @@ Customers use the command from **Connect existing VPS**, which fetches `/enroll/
 Copy `whmcs-module/snbdpanel/` to `<whmcs>/modules/servers/snbdpanel/`. Add the panel as a WHMCS server using its hostname, enable **Secure**, and set **Access Hash** to `WHMCS_WEBHOOK_SECRET`. Configure a product with the **SNBD Panel** module and the appropriate provider, region, OS, and plan. Hetzner products require an actual Hetzner server type.
 
 The module sends HMAC-signed requests to `POST /webhooks/whmcs` with timestamp and idempotency headers. Supported actions are `create`, `suspend`, `unsuspend`, `changepackage`, `terminate`, and `sso`. SSO links are single-use and valid for 60 seconds. The [staging guide](docs/STAGING.md) covers full setup and validation.
+
+That webhook is WHMCS calling the panel after an order is paid. The other direction — a client ordering a *new* VPS from inside the panel — is read-only against the WHMCS API and never touches payment:
+
+1. Put every sellable VPS product into one WHMCS Product Group (Setup > Products/Services > Create/Manage Groups) and note its group ID.
+2. Generate an API credential (Setup > API Credentials) and set `WHMCS_API_URL` (e.g. `https://portal.snbdhost.com`), `WHMCS_API_IDENTIFIER`, `WHMCS_API_SECRET`, and `WHMCS_VPS_GROUP_ID` in the API's environment.
+3. The dashboard's **Order a new VPS** button calls `GET /api/vps-plans`, which fetches that group's products (name, description, live pricing) straight from `GetProducts` and returns one `orderUrl` per plan pointing at `WHMCS_API_URL/cart.php?a=add&pid=<id>`.
+4. Clicking a plan opens that cart link in a new tab, where the client logs in/registers and pays on WHMCS with whatever gateways are already configured there. Once WHMCS activates the order, the existing `snbdpanel` module webhook provisions the server and it appears in the dashboard on its own.
+
+Changing the WHMCS address or group later is just an environment-variable edit and a restart — no code change or redeploy.
 
 Check available server types and OS images before real provisioning:
 
