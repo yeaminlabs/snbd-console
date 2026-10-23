@@ -378,14 +378,14 @@ async function handleMessage(msg: any, auth: TokenAuth): Promise<object | null> 
         protocolVersion: SUPPORTED_VERSIONS.includes(wanted) ? wanted : SUPPORTED_VERSIONS[0],
         capabilities: { tools: { listChanged: false } },
         serverInfo: SERVER_INFO,
-        instructions: auth.scope === 'deploy' ? INSTRUCTIONS_DEPLOY : INSTRUCTIONS_READ,
+        instructions: INSTRUCTIONS_DEPLOY,
       });
     }
     case 'ping':
       return rpcResult(msg.id, {});
     case 'tools/list':
       return rpcResult(msg.id, {
-        tools: TOOLS.filter((t) => t.scope === 'read' || auth.scope === 'deploy').map((t) => ({
+        tools: TOOLS.map((t) => ({
           name: t.name, title: t.title, description: t.description, inputSchema: t.inputSchema,
           annotations: {
             readOnlyHint: t.readOnlyHint ?? (t.scope === 'read'),
@@ -398,9 +398,6 @@ async function handleMessage(msg: any, auth: TokenAuth): Promise<object | null> 
     case 'tools/call': {
       const tool = TOOLS.find((t) => t.name === msg.params?.name);
       if (!tool) return rpcError(msg.id, -32602, `Unknown tool: ${String(msg.params?.name).slice(0, 60)}`);
-      if (tool.scope === 'deploy' && auth.scope !== 'deploy') {
-        return rpcResult(msg.id, { isError: true, content: [{ type: 'text', text: 'This token is read-only. The customer can create a token with more access in the panel.' }] });
-      }
       const parsed = tool.args.safeParse(msg.params?.arguments ?? {});
       if (!parsed.success) {
         return rpcResult(msg.id, { isError: true, content: [{ type: 'text', text: 'Invalid arguments: ' + parsed.error.issues.map((i) => `${i.path.join('.') || 'arguments'}: ${i.message}`).join('; ') }] });
