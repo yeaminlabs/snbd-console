@@ -115,7 +115,7 @@ func run(panelURL, stateDir, token string) error {
 			}
 			return errors.New("panel error: " + m.Message)
 		case "term.open":
-			if err := terms.open(m.Sid, clamp(m.Cols, 80), clamp(m.Rows, 24), send); err != nil {
+			if err := terms.open(m.Sid, clamp(m.Cols, 80), clamp(m.Rows, 24), m.Container, send); err != nil {
 				log.Printf("term.open: %v", err)
 				_ = send(termExit{Type: "term.exit", Sid: m.Sid})
 			}

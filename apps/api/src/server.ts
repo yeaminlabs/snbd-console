@@ -134,12 +134,28 @@ app.get<{ Params: { id: string } }>('/api/servers/:id/metrics', async (req, repl
      group by g.t order by g.t`,
     [req.params.id],
   );
-  const latest = await pool.query(
-    `select at, cpu, mem_used::float as "memUsed", mem_total::float as "memTotal", disk_used::float as "diskUsed", disk_total::float as "diskTotal", uptime::float as uptime
-     from heartbeats where server_id = $1 order by at desc limit 1`,
+  // fetch last two stored readings to compute net I/O rates as bytes/s
+  const recent = await pool.query(
+    `select at, cpu, mem_used::float as "memUsed", mem_total::float as "memTotal",
+            disk_used::float as "diskUsed", disk_total::float as "diskTotal", uptime::float as uptime,
+            load1::float as "load1", load5::float as "load5", load15::float as "load15",
+            swap_used::float as "swapUsed", swap_total::float as "swapTotal",
+            net_in::float as "netIn", net_out::float as "netOut"
+     from heartbeats where server_id = $1 order by at desc limit 2`,
     [req.params.id],
   );
-  return { points: points.rows, latest: latest.rows[0] ?? null };
+  let latest = recent.rows[0] ?? null;
+  if (latest && recent.rows[1]) {
+    const curr = recent.rows[0];
+    const prev = recent.rows[1];
+    const secs = Math.max(1, (new Date(curr.at).getTime() - new Date(prev.at).getTime()) / 1000);
+    latest = {
+      ...curr,
+      netInRate: curr.netIn != null && prev.netIn != null ? Math.max(0, (curr.netIn - prev.netIn) / secs) : null,
+      netOutRate: curr.netOut != null && prev.netOut != null ? Math.max(0, (curr.netOut - prev.netOut) / secs) : null,
+    };
+  }
+  return { points: points.rows, latest };
 });
 
 // Full history for the Activity page, newest first, paged by id. Only the client's own servers.
@@ -257,7 +273,7 @@ app.get('/agent', { websocket: true, ...ipLimit(300) }, (socket, req) => {
     agents.set(serverId, conn);
     await pool.query(`update servers set status = 'running', reinstall_started_at = null where id = $1 and status in ('provisioning', 'agent_offline', 'stopped')`, [serverId]);
     await pool.query('update servers set reinstall_started_at = null where id = $1', [serverId]);
-    await pool.query('update servers set last_seen_ip = $2::inet where id = $1', [serverId, ip]).catch(() => {});
+    await pool.query('update servers set last_seen_ip = $2::inet, ip = coalesce(ip, $2::inet) where id = $1', [serverId, ip]).catch(() => {});
     await audit(null, serverId, 'agent.connected');
     send(socket, { type: 'ready' });
     await pool.query('update servers set offline_since = null where id = $1', [serverId]);
@@ -304,8 +320,15 @@ app.get('/agent', { websocket: true, ...ipLimit(300) }, (socket, req) => {
           if (now - conn.lastStored >= HEARTBEAT_STORE_EVERY_MS) {
             conn.lastStored = now;
             await pool.query(
-              `insert into heartbeats (server_id, cpu, mem_used, mem_total, disk_used, disk_total, uptime) values ($1,$2,$3,$4,$5,$6,$7)`,
-              [conn.serverId, msg.cpu, msg.memUsed, msg.memTotal, msg.diskUsed, msg.diskTotal, msg.uptime],
+              `insert into heartbeats (server_id, cpu, mem_used, mem_total, disk_used, disk_total, uptime, load1, load5, load15, swap_used, swap_total, net_in, net_out)
+               values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+              [
+                conn.serverId,
+                msg.cpu, msg.memUsed, msg.memTotal, msg.diskUsed, msg.diskTotal, msg.uptime,
+                msg.load1 ?? null, msg.load5 ?? null, msg.load15 ?? null,
+                msg.swapUsed ?? null, msg.swapTotal ?? null,
+                msg.netIn ?? null, msg.netOut ?? null,
+              ],
             );
           }
           break;
@@ -362,7 +385,7 @@ app.get('/agent', { websocket: true, ...ipLimit(300) }, (socket, req) => {
 
 // ---- browser terminal relay ----------------------------------------------
 
-app.get<{ Params: { id: string } }>('/ws/terminal/:id', { websocket: true }, async (socket, req) => {
+app.get<{ Params: { id: string }; Querystring: { container?: string } }>('/ws/terminal/:id', { websocket: true }, async (socket, req) => {
   // messages that arrive while we authorize are buffered, then replayed
   const early: Buffer[] = [];
   const buffer = (raw: Buffer) => early.push(raw);
@@ -370,6 +393,8 @@ app.get<{ Params: { id: string } }>('/ws/terminal/:id', { websocket: true }, asy
 
   const client = await clientFromRequest(req);
   const serverId = req.params.id;
+  // optional container name for docker exec sessions (safe chars only)
+  const container = /^[a-zA-Z0-9_.\-]{1,128}$/.test(req.query.container ?? '') ? req.query.container : undefined;
   const owns =
     client && z.string().uuid().safeParse(serverId).success
       ? (await pool.query('select 1 from servers where id = $1 and client_id = $2 and suspended_at is null and terminated_at is null', [serverId, client.id])).rowCount === 1
@@ -380,7 +405,7 @@ app.get<{ Params: { id: string } }>('/ws/terminal/:id', { websocket: true }, asy
 
   const sid = randomUUID();
   agent.terminals.set(sid, socket);
-  await audit(client.id, serverId, 'terminal.open', { sid });
+  await audit(client.id, serverId, 'terminal.open', { sid, container });
   let opened = false;
 
   const handle = (raw: Buffer) => {
@@ -393,7 +418,7 @@ app.get<{ Params: { id: string } }>('/ws/terminal/:id', { websocket: true }, asy
     if (msg.type === 'resize') {
       if (!opened) {
         opened = true;
-        send(agent.socket, { type: 'term.open', sid, cols: msg.cols, rows: msg.rows });
+        send(agent.socket, { type: 'term.open', sid, cols: msg.cols, rows: msg.rows, ...(container ? { container } : {}) });
       } else {
         send(agent.socket, { type: 'term.resize', sid, cols: msg.cols, rows: msg.rows });
       }

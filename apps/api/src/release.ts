@@ -20,6 +20,7 @@ function renderInstaller(url: string, token: string): string {
   const pubPath = join(releasesDir, 'release.pub');
   if (!existsSync(pubPath)) throw new Error('release.pub missing; run scripts/build-agent.sh');
   return readFileSync(scriptPath, 'utf8')
+    .replace(/\r\n/g, '\n')
     .replace('@PANEL_URL@', url)
     .replace('@ENROLL_TOKEN@', token)
     .replace('@RELEASE_PUBKEY@', readFileSync(pubPath, 'utf8').trim());

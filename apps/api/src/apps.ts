@@ -1,5 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { type AppManifest, type FormField, generateComposeInstallScript, generateComposeUninstallScript, getManifest, listManifests } from './apps-registry.js';
+
+export type { AppManifest, FormField };
 
 export interface AppDef {
   id: string;
@@ -10,16 +13,57 @@ export interface AppDef {
   check: string;
 }
 
-export const APPS: AppDef[] = [
+// Fallback definitions for apps without a manifest (keeps backward compat if manifests dir is missing)
+const FALLBACK: AppDef[] = [
   { id: 'claude', name: 'Claude Code', tag: 'AI coding agent', desc: 'Anthropic CLI for working on code from the terminal.', check: 'command -v claude' },
   { id: 'hermes', name: 'Hermes Agent', tag: 'AI agent', desc: 'Self-hosted agent with tools and memory.', check: '[ -x /root/.local/bin/hermes ] || command -v hermes' },
   { id: 'openclaw', name: 'OpenClaw', tag: 'AI assistant', desc: 'Personal assistant gateway you can message from chat apps.', check: 'command -v openclaw' },
   { id: 'docker', name: 'Docker', tag: 'Runtime', desc: 'Docker Engine with the Compose plugin.', check: 'command -v docker' },
   { id: 'node', name: 'Node.js 22', tag: 'Runtime', desc: 'LTS runtime with npm and corepack.', check: `command -v node && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 22 ]` },
-  { id: 'n8n', name: 'n8n', tag: 'Automation', desc: 'Workflow automation in Docker on port 5678 of the VPS, local only. Open it through an SSH tunnel or a reverse proxy.', check: "docker ps -a --format '{{.Names}}' | grep -qx n8n" },
+  { id: 'n8n', name: 'n8n', tag: 'Automation', desc: 'Workflow automation in Docker on port 5678.', check: "docker ps -a --format '{{.Names}}' | grep -qx n8n" },
   { id: 'ollama', name: 'Ollama', tag: 'Local models', desc: 'Run open models on this server.', check: 'command -v ollama' },
 ];
 
+function buildApps(): AppDef[] {
+  const manifests = listManifests();
+  if (!manifests.length) return FALLBACK;
+  const order = [
+    // AI tools (CLI)
+    'claude', 'hermes', 'openclaw',
+    // Runtimes / infrastructure
+    'docker', 'node',
+    // AI services
+    'n8n', 'ollama',
+    // DevOps
+    'gitea',
+    // Web server
+    'nginx-proxy-manager',
+    // Websites/CMS
+    'wordpress',
+    // DevTools
+    'phpmyadmin',
+    // Monitoring / tools
+    'portainer', 'uptime-kuma', 'grafana', 'filebrowser',
+    // Security
+    'vaultwarden',
+    // Media
+    'jellyfin',
+    // Storage
+    'nextcloud', 'minio',
+  ];
+  const byId = new Map(manifests.map((m) => [m.id, m]));
+  const ids = [...order, ...manifests.map((m) => m.id).filter((id) => !order.includes(id))];
+  return ids
+    .map((id) => {
+      const m = byId.get(id);
+      const fb = FALLBACK.find((f) => f.id === id);
+      if (!m) return fb ?? null;
+      return { id: m.id, name: m.name, tag: m.tag, desc: m.desc, check: m.check ?? fb?.check ?? 'false' };
+    })
+    .filter(Boolean) as AppDef[];
+}
+
+export const APPS: AppDef[] = buildApps();
 export const findApp = (id: string) => APPS.find((a) => a.id === id);
 
 // all checks in one round trip: prints "<id>=1" or "<id>=0" per app
@@ -27,11 +71,25 @@ export const CHECK_SCRIPT = APPS.map((a) => `if ( ${a.check} ) >/dev/null 2>&1; 
 
 const appsDir = join(import.meta.dirname, '..', '..', '..', 'scripts', 'apps');
 
-/** Shared helpers plus the recipe, sent to the agent as one script. */
-export function loadRecipe(id: string): string | null {
+/** Returns the install script for an app — compose apps generate it dynamically; script apps read from disk. */
+export function loadRecipe(id: string, params: Record<string, string> = {}): string | null {
   if (!findApp(id)) return null;
+  const manifest = getManifest(id);
+  if (manifest?.type === 'compose') return generateComposeInstallScript(manifest, params);
   try {
     return readFileSync(join(appsDir, '_lib.sh'), 'utf8') + '\n' + readFileSync(join(appsDir, `${id}.sh`), 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+/** Returns the uninstall script for an app — compose apps generate it dynamically; script apps read from disk. */
+export function loadUninstallRecipe(id: string): string | null {
+  if (!findApp(id)) return null;
+  const manifest = getManifest(id);
+  if (manifest?.type === 'compose') return generateComposeUninstallScript(manifest);
+  try {
+    return readFileSync(join(appsDir, '_lib.sh'), 'utf8') + '\n' + readFileSync(join(appsDir, 'uninstall', `${id}.sh`), 'utf8');
   } catch {
     return null;
   }

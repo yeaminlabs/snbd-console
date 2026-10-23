@@ -1,0 +1,18 @@
+{
+  "id": "gitea",
+  "name": "Gitea",
+  "tag": "DevOps",
+  "desc": "Lightweight self-hosted Git service with web UI, issues, and CI runners.",
+  "version": "latest",
+  "type": "compose",
+  "installDir": "/opt/snbd/apps/gitea",
+  "containerName": "snbd-gitea",
+  "check": "docker ps --format '{{.Names}}' | grep -qx snbd-gitea",
+  "postInstall": {
+    "note": "Gitea is running. Access it at http://<server-ip>:${GITEA_HTTP_PORT} (open port in firewall or use SSH tunnel). SSH clone port: ${GITEA_SSH_PORT}."
+  },
+  "form": [
+    { "key": "GITEA_HTTP_PORT", "label": "HTTP port", "type": "number", "default": "3000", "required": true },
+    { "key": "GITEA_SSH_PORT", "label": "SSH port", "type": "number", "default": "2222", "required": true }
+  ]
+}

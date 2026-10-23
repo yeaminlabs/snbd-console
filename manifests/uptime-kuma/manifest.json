@@ -1,0 +1,17 @@
+{
+  "id": "uptime-kuma",
+  "name": "Uptime Kuma",
+  "tag": "Monitoring",
+  "desc": "Self-hosted uptime monitoring tool with notifications and status pages.",
+  "version": "latest",
+  "type": "compose",
+  "installDir": "/opt/snbd/apps/uptime-kuma",
+  "containerName": "snbd-uptime-kuma",
+  "check": "docker ps --format '{{.Names}}' | grep -qx snbd-uptime-kuma",
+  "postInstall": {
+    "note": "Uptime Kuma is running at http://127.0.0.1:${KUMA_PORT} (use SSH tunnel or open port). Create an admin account on first visit."
+  },
+  "form": [
+    { "key": "KUMA_PORT", "label": "HTTP port", "type": "number", "default": "3001", "required": true }
+  ]
+}

@@ -2,7 +2,8 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { APPS, CHECK_SCRIPT, findApp, loadRecipe, parseProgress } from './apps.js';
+import { APPS, CHECK_SCRIPT, findApp, loadRecipe, loadUninstallRecipe, parseProgress } from './apps.js';
+import { getManifest, listManifests } from './apps-registry.js';
 import { RpcError, rpc, sendToAgent } from './agentRpc.js';
 import { audit, pool } from './db.js';
 import { ownedServer } from './manage.js';
@@ -164,33 +165,91 @@ export function registerTools(app: FastifyInstance) {
       if (!(e instanceof RpcError) || e.status !== 503) return fail(reply, e);
     }
     const { rows } = await pool.query(
-      `select id, replace(kind, 'install:', '') as app, status from jobs where server_id = $1 order by created_at desc limit 1`,
+      `select id, regexp_replace(kind, '^(install|uninstall):', '') as app, kind, status from jobs
+       where server_id = $1 and status in ('queued', 'running', 'done', 'failed')
+       order by queued_position asc`,
       [g.server.id],
     );
+    const manifests = new Map(listManifests().map((m) => [m.id, m]));
     return {
       agentConnected: installed !== null,
-      apps: APPS.map((a) => ({ id: a.id, name: a.name, tag: a.tag, desc: a.desc, installed: installed ? !!installed[a.id] : null })),
-      lastJob: rows[0] ?? null,
+      apps: APPS.map((a) => {
+        const m = manifests.get(a.id);
+        return {
+          id: a.id,
+          name: a.name,
+          tag: a.tag,
+          desc: a.desc,
+          installed: installed ? !!installed[a.id] : null,
+          type: m?.type ?? 'script',
+          installDir: m?.installDir ?? null,
+          containerName: m?.type === 'compose' ? (m.containerName ?? `snbd-${a.id}`) : null,
+          form: m?.form ?? [],
+          postInstall: m?.postInstall ?? null,
+        };
+      }),
+      activeJobs: rows as { id: string; app: string; kind: string; status: string }[],
     };
   });
 
   app.post<{ Params: { id: string; app: string } }>('/api/servers/:id/apps/:app/install', async (req, reply) => {
     const g = await guard(req, reply); if (!g) return;
     const def = findApp(req.params.app);
-    const script = def && loadRecipe(def.id);
-    if (!def || !script) return reply.code(404).send({ error: 'Unknown app' });
-    let jobId = randomUUID();
-    try {
-      await pool.query(`insert into jobs (id, server_id, kind, status) values ($1, $2, $3, 'queued')`, [jobId, g.server.id, `install:${def.id}`]);
-    } catch (e: any) {
-      if (e?.code === '23505') return reply.code(409).send({ error: 'Another install is already running on this server' });
-      throw e;
+    if (!def) return reply.code(404).send({ error: 'Unknown app' });
+
+    // Accept optional user params for compose-type apps (key→value map)
+    const body = z.object({ params: z.record(z.string()).optional() }).safeParse(req.body);
+    const userParams = body.success ? (body.data.params ?? {}) : {};
+
+    const manifest = getManifest(def.id);
+
+    // Validate required form fields for compose apps
+    if (manifest?.type === 'compose' && manifest.form) {
+      for (const field of manifest.form) {
+        if (field.required && !userParams[field.key] && !field.default) {
+          return reply.code(400).send({ error: `Field "${field.label}" is required` });
+        }
+      }
     }
-    if (!sendToAgent(g.server.id, { type: 'job.start', jobId, script })) {
-      await pool.query(`update jobs set status = 'failed', finished_at = now(), log = 'The server agent is offline' where id = $1`, [jobId]);
-      return reply.code(503).send({ error: 'The server agent is offline' });
+
+    const script = loadRecipe(def.id, userParams);
+    if (!script) return reply.code(404).send({ error: 'No install recipe found' });
+
+    const jobId = randomUUID();
+    await pool.query(`insert into jobs (id, server_id, kind, status, script) values ($1, $2, $3, 'queued', $4)`, [jobId, g.server.id, `install:${def.id}`, script]);
+    // only dispatch immediately if no other job is already running or queued ahead
+    const { rows: active } = await pool.query(
+      `select id from jobs where server_id = $1 and status in ('running', 'queued') and id <> $2 limit 1`,
+      [g.server.id, jobId],
+    );
+    if (!active.length) {
+      if (!sendToAgent(g.server.id, { type: 'job.start', jobId, script })) {
+        await pool.query(`update jobs set status = 'failed', finished_at = now(), log = 'The server agent is offline' where id = $1`, [jobId]);
+        return reply.code(503).send({ error: 'The server agent is offline' });
+      }
     }
     await audit(g.client.id, g.server.id, 'app.install', { app: def.id, jobId });
+    return { jobId };
+  });
+
+  app.post<{ Params: { id: string; app: string } }>('/api/servers/:id/apps/:app/uninstall', async (req, reply) => {
+    const g = await guard(req, reply); if (!g) return;
+    const def = findApp(req.params.app);
+    const script = def && loadUninstallRecipe(def.id);
+    if (!def || !script) return reply.code(404).send({ error: 'Unknown app or no uninstall recipe' });
+    const jobId = randomUUID();
+    await pool.query(`insert into jobs (id, server_id, kind, status, script) values ($1, $2, $3, 'queued', $4)`, [jobId, g.server.id, `uninstall:${def.id}`, script]);
+    const { rows: active } = await pool.query(
+      `select id from jobs where server_id = $1 and status in ('running', 'queued') and id <> $2 limit 1`,
+      [g.server.id, jobId],
+    );
+    if (!active.length) {
+      if (!sendToAgent(g.server.id, { type: 'job.start', jobId, script })) {
+        await pool.query(`update jobs set status = 'failed', finished_at = now(), log = 'The server agent is offline' where id = $1`, [jobId]);
+        return reply.code(503).send({ error: 'The server agent is offline' });
+      }
+    }
+    await audit(g.client.id, g.server.id, 'app.uninstall', { app: def.id, jobId });
     return { jobId };
   });
 
@@ -199,7 +258,7 @@ export function registerTools(app: FastifyInstance) {
     if (!z.string().uuid().safeParse(req.params.job).success) return reply.code(404).send({ error: 'Not found' });
     const from = Math.max(0, Number(req.query.from ?? 0) || 0);
     const { rows } = await pool.query(
-      `select status, replace(kind, 'install:', '') as app, length(log) as len, substr(log, $3 + 1) as chunk, log
+      `select status, regexp_replace(kind, '^(install|uninstall):', '') as app, kind, length(log) as len, substr(log, $3 + 1) as chunk, log
        from jobs where id = $1 and server_id = $2`,
       [req.params.job, g.server.id, from],
     );
@@ -218,6 +277,111 @@ export function registerTools(app: FastifyInstance) {
     sendToAgent(g.server.id, { type: 'job.cancel', jobId: req.params.job });
     await audit(g.client.id, g.server.id, 'app.cancel', { jobId: req.params.job });
     return { ok: true };
+  });
+
+  // ---- app config editor ----------------------------------------------------
+  /** Read compose + .env files for an installed compose app */
+  app.get<{ Params: { id: string; app: string } }>('/api/servers/:id/apps/:app/config', async (req, reply) => {
+    const g = await guard(req, reply); if (!g) return;
+    const manifest = getManifest(req.params.app);
+    if (!manifest || manifest.type !== 'compose' || !manifest.installDir) {
+      return reply.code(404).send({ error: 'App not found or not a compose app' });
+    }
+    const dir = manifest.installDir;
+    try {
+      const [composeResult, envResult] = await Promise.allSettled([
+        rpc<{ content: string }>(g.server.id, 'fs.read', { path: `${dir}/docker-compose.yml`, offset: 0, length: PART }),
+        rpc<{ content: string }>(g.server.id, 'fs.read', { path: `${dir}/.env`, offset: 0, length: PART }),
+      ]);
+      const compose = composeResult.status === 'fulfilled'
+        ? Buffer.from((composeResult.value as any).data ?? '', 'base64').toString('utf8')
+        : '';
+      const env = envResult.status === 'fulfilled'
+        ? Buffer.from((envResult.value as any).data ?? '', 'base64').toString('utf8')
+        : '';
+      return { compose, env };
+    } catch (e) { return fail(reply, e); }
+  });
+
+  /** Write compose and/or .env files, then queue a `docker compose up -d` restart job */
+  app.put<{ Params: { id: string; app: string } }>('/api/servers/:id/apps/:app/config', async (req, reply) => {
+    const g = await guard(req, reply); if (!g) return;
+    const manifest = getManifest(req.params.app);
+    if (!manifest || manifest.type !== 'compose' || !manifest.installDir) {
+      return reply.code(404).send({ error: 'App not found or not a compose app' });
+    }
+    const body = z.object({
+      compose: z.string().optional(),
+      env: z.string().optional(),
+    }).safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: 'Invalid input' });
+    const dir = manifest.installDir;
+    try {
+      if (body.data.compose !== undefined) {
+        await rpc(g.server.id, 'fs.writefile', { path: `${dir}/docker-compose.yml`, data: Buffer.from(body.data.compose, 'utf8').toString('base64') });
+      }
+      if (body.data.env !== undefined) {
+        await rpc(g.server.id, 'fs.writefile', { path: `${dir}/.env`, data: Buffer.from(body.data.env, 'utf8').toString('base64') });
+      }
+      // Queue a restart job
+      const restartScript = `#!/bin/bash
+set -euo pipefail
+echo "##STEP 1/1 Restarting ${manifest.name}..."
+docker compose -f "${dir}/docker-compose.yml" up -d --remove-orphans 2>&1
+echo "✓ ${manifest.name} restarted."
+`;
+      const jobId = randomUUID();
+      await pool.query(`insert into jobs (id, server_id, kind, status, script) values ($1, $2, $3, 'queued', $4)`, [jobId, g.server.id, `restart:${manifest.id}`, restartScript]);
+      const { rows: active } = await pool.query(
+        `select id from jobs where server_id = $1 and status in ('running', 'queued') and id <> $2 limit 1`,
+        [g.server.id, jobId],
+      );
+      if (!active.length) {
+        sendToAgent(g.server.id, { type: 'job.start', jobId, script: restartScript });
+      }
+      await audit(g.client.id, g.server.id, 'app.config', { app: manifest.id, jobId });
+      return { ok: true, jobId };
+    } catch (e) { return fail(reply, e); }
+  });
+
+  // ---- container file manager -----------------------------------------------
+  app.get<{ Params: { id: string; app: string }; Querystring: { path?: string } }>('/api/servers/:id/apps/:app/container-files', async (req, reply) => {
+    const g = await guard(req, reply); if (!g) return;
+    const manifest = getManifest(req.params.app);
+    if (!manifest || manifest.type !== 'compose') return reply.code(404).send({ error: 'Not a compose app' });
+    const container = manifest.containerName ?? `snbd-${manifest.id}`;
+    const path = req.query.path ?? '/';
+    try {
+      return await rpc(g.server.id, 'container.ls', { container, path });
+    } catch (e) { return fail(reply, e); }
+  });
+
+  app.get<{ Params: { id: string; app: string }; Querystring: { path?: string } }>('/api/servers/:id/apps/:app/container-files/content', async (req, reply) => {
+    const g = await guard(req, reply); if (!g) return;
+    const manifest = getManifest(req.params.app);
+    if (!manifest || manifest.type !== 'compose') return reply.code(404).send({ error: 'Not a compose app' });
+    const path = AbsPath.safeParse(req.query.path);
+    if (!path.success) return reply.code(400).send({ error: 'Invalid path' });
+    const container = manifest.containerName ?? `snbd-${manifest.id}`;
+    try {
+      const r = await rpc<{ path: string; size: number; content: string }>(g.server.id, 'container.read', { container, path: path.data });
+      if (r.content.includes('\0')) return reply.code(415).send({ error: 'Binary file' });
+      return r;
+    } catch (e) { return fail(reply, e); }
+  });
+
+  app.put<{ Params: { id: string; app: string } }>('/api/servers/:id/apps/:app/container-files/content', async (req, reply) => {
+    const g = await guard(req, reply); if (!g) return;
+    const manifest = getManifest(req.params.app);
+    if (!manifest || manifest.type !== 'compose') return reply.code(404).send({ error: 'Not a compose app' });
+    const body = z.object({ path: AbsPath, content: z.string() }).safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: 'Invalid input' });
+    const container = manifest.containerName ?? `snbd-${manifest.id}`;
+    const buf = Buffer.from(body.data.content, 'utf8');
+    try {
+      await rpc(g.server.id, 'container.write', { container, path: body.data.path, data: buf.toString('base64') });
+      return { ok: true };
+    } catch (e) { return fail(reply, e); }
   });
 
   // ---- password -------------------------------------------------------------

@@ -1,0 +1,12 @@
+{
+  "id": "docker",
+  "name": "Docker",
+  "tag": "Runtime",
+  "desc": "Docker Engine with the Compose plugin.",
+  "version": "latest",
+  "type": "script",
+  "check": "command -v docker",
+  "postInstall": {
+    "note": "Docker Engine is installed. Other apps that require Docker can now be installed."
+  }
+}

@@ -1,0 +1,13 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: snbd-ollama
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${OLLAMA_PORT}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+volumes:
+  ollama_data:
+    name: snbd-ollama-data

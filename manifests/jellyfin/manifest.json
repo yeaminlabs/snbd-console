@@ -1,0 +1,17 @@
+{
+  "id": "jellyfin",
+  "name": "Jellyfin",
+  "tag": "Media",
+  "desc": "Free open-source media server for streaming movies, music, and TV shows.",
+  "version": "latest",
+  "type": "compose",
+  "installDir": "/opt/snbd/apps/jellyfin",
+  "containerName": "snbd-jellyfin",
+  "check": "docker ps --format '{{.Names}}' | grep -qx snbd-jellyfin",
+  "postInstall": {
+    "note": "Jellyfin is running at http://127.0.0.1:${JELLYFIN_PORT} (use SSH tunnel or open port). Complete the setup wizard to add your media libraries."
+  },
+  "form": [
+    { "key": "JELLYFIN_PORT", "label": "HTTP port", "type": "number", "default": "8096", "required": true }
+  ]
+}

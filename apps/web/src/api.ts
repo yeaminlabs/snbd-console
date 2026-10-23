@@ -23,13 +23,34 @@ export interface Server {
 
 export interface Metrics {
   points: { t: string; cpu: number | null }[];
-  latest: { at: string; cpu: number; memUsed: number; memTotal: number; diskUsed: number; diskTotal: number; uptime: number } | null;
+  latest: {
+    at: string;
+    cpu: number;
+    memUsed: number; memTotal: number;
+    diskUsed: number; diskTotal: number;
+    uptime: number;
+    load1: number | null; load5: number | null; load15: number | null;
+    swapUsed: number | null; swapTotal: number | null;
+    netInRate: number | null;   // bytes/s
+    netOutRate: number | null;  // bytes/s
+  } | null;
 }
 
 export interface OsImage { image: string; name: string; ver: string }
 export interface FileEntry { name: string; type: 'dir' | 'file' | 'other'; link?: boolean; size: number; mode: string; mtime: number }
-export interface AppInfo { id: string; name: string; tag: string; desc: string; installed: boolean | null }
-export interface JobState { status: 'queued' | 'running' | 'done' | 'failed'; app: string; offset: number; log: string; pct: number; step: string }
+export interface AppFormField { key: string; label: string; type: 'text' | 'password' | 'number'; default: string; required: boolean; hint?: string }
+export interface AppInfo {
+  id: string; name: string; tag: string; desc: string;
+  installed: boolean | null;
+  type: 'script' | 'compose';
+  installDir: string | null;
+  containerName: string | null;
+  form: AppFormField[];
+  postInstall: { url?: string; note?: string } | null;
+}
+export interface ContainerFileEntry { name: string; type: 'dir' | 'file' | 'other'; size: number; mode: string; mtime: number }
+export interface JobState { status: 'queued' | 'running' | 'done' | 'failed'; app: string; kind: string; offset: number; log: string; pct: number; step: string }
+export interface ActiveJob { id: string; app: string; kind: string; status: 'queued' | 'running' | 'done' | 'failed' }
 export interface AuditItem { id: number; action: string; at: string; meta: Record<string, any>; system: boolean; via: string | null; serverId: string; server: string }
 export interface OAuthRequestInfo { clientName: string; returnsTo: string; servers: { id: string; name: string }[]; access: string }
 export interface TokenInfo { kind: 'token' | 'connector'; id: string; name: string; prefix: string; scope: 'read' | 'deploy'; serverIds: string[] | null; serverNames: string[]; expiresAt: string | null; lastUsedAt: string | null; createdAt: string }
@@ -62,8 +83,14 @@ export const api = {
   mkdir: (id: string, path: string) => post(`/api/servers/${id}/files/mkdir`, { path }).then(json<{ ok: true }>),
   rename: (id: string, from: string, to: string) => post(`/api/servers/${id}/files/rename`, { from, to }).then(json<{ ok: true }>),
   remove: (id: string, path: string) => post(`/api/servers/${id}/files/delete`, { path }).then(json<{ ok: true }>),
-  apps: (id: string) => fetch(`/api/servers/${id}/apps`).then(json<{ agentConnected: boolean; apps: AppInfo[]; lastJob: { id: string; app: string; status: string } | null }>),
-  install: (id: string, app: string) => post(`/api/servers/${id}/apps/${app}/install`, {}).then(json<{ jobId: string }>),
+  apps: (id: string) => fetch(`/api/servers/${id}/apps`).then(json<{ agentConnected: boolean; apps: AppInfo[]; activeJobs: ActiveJob[] }>),
+  install: (id: string, app: string, params?: Record<string, string>) => post(`/api/servers/${id}/apps/${app}/install`, { params }).then(json<{ jobId: string }>),
+  uninstall: (id: string, app: string) => post(`/api/servers/${id}/apps/${app}/uninstall`, {}).then(json<{ jobId: string }>),
+  appConfig: (id: string, app: string) => fetch(`/api/servers/${id}/apps/${app}/config`).then(json<{ compose: string; env: string }>),
+  saveAppConfig: (id: string, app: string, data: { compose?: string; env?: string }) => fetch(`/api/servers/${id}/apps/${app}/config`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data) }).then(json<{ ok: true; jobId: string }>),
+  containerFiles: (id: string, app: string, path: string) => fetch(`/api/servers/${id}/apps/${app}/container-files?path=${encodeURIComponent(path)}`).then(json<{ path: string; entries: ContainerFileEntry[] }>),
+  containerFileContent: (id: string, app: string, path: string) => fetch(`/api/servers/${id}/apps/${app}/container-files/content?path=${encodeURIComponent(path)}`).then(json<{ path: string; size: number; content: string }>),
+  saveContainerFile: (id: string, app: string, path: string, content: string) => fetch(`/api/servers/${id}/apps/${app}/container-files/content`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path, content }) }).then(json<{ ok: true }>),
   job: (id: string, jobId: string, from: number) => fetch(`/api/servers/${id}/jobs/${jobId}?from=${from}`).then(json<JobState>),
   cancelJob: (id: string, jobId: string) => post(`/api/servers/${id}/jobs/${jobId}/cancel`, {}).then(json<{ ok: true }>),
   resetPassword: (id: string) => post(`/api/servers/${id}/password-reset`, {}).then(json<{ user: string; password: string }>),

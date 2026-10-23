@@ -25,6 +25,7 @@ type rpcArgs struct {
 	TimeoutMs int    `json:"timeoutMs"`
 	User      string `json:"user"`
 	Password  string `json:"password"`
+	Container string `json:"container"`
 }
 
 // handleRPC runs one panel request and always answers, success or failure.
@@ -59,6 +60,12 @@ func handleRPC(m inbound, send func(any) error) {
 		data, err = runExec(a.Script, a.TimeoutMs)
 	case "setpassword":
 		data, err = setPassword(a.User, a.Password)
+	case "container.ls":
+		data, err = containerLs(a.Container, a.Path)
+	case "container.read":
+		data, err = containerRead(a.Container, a.Path)
+	case "container.write":
+		data, err = containerWrite(a.Container, a.Path, a.Data)
 	default:
 		err = errors.New("unknown operation")
 	}

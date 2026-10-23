@@ -34,12 +34,30 @@ func shellPath() string {
 	return "sh"
 }
 
-// open starts a login shell on a new PTY and streams its output to send().
-func (t *terminals) open(sid string, cols, rows int, send func(any) error) error {
-	cmd := exec.Command(shellPath(), "-l")
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
-	if home, err := os.UserHomeDir(); err == nil {
-		cmd.Dir = home
+// open starts a PTY shell on the VPS or inside a container and streams its output to send().
+// When container is non-empty, it runs `docker exec -i <container> /bin/sh` instead.
+func (t *terminals) open(sid string, cols, rows int, container string, send func(any) error) error {
+	var cmd *exec.Cmd
+	if container != "" {
+		if err := validateContainer(container); err != nil {
+			return err
+		}
+		shell := "/bin/sh"
+		for _, s := range []string{"/bin/bash", "/bin/sh"} {
+			out, err := exec.Command("docker", "exec", container, "test", "-x", s).CombinedOutput()
+			_ = out
+			if err == nil {
+				shell = s
+				break
+			}
+		}
+		cmd = exec.Command("docker", "exec", "-i", container, shell)
+	} else {
+		cmd = exec.Command(shellPath(), "-l")
+		cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+		if home, err := os.UserHomeDir(); err == nil {
+			cmd.Dir = home
+		}
 	}
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
 	if err != nil {

@@ -1,0 +1,15 @@
+{
+  "id": "openclaw",
+  "name": "OpenClaw",
+  "tag": "AI assistant",
+  "desc": "Personal AI assistant gateway in an isolated container with a persistent workspace.",
+  "version": "latest",
+  "type": "compose",
+  "installDir": "/opt/snbd/apps/openclaw",
+  "containerName": "snbd-openclaw",
+  "check": "docker ps --format '{{.Names}}' | grep -qx snbd-openclaw",
+  "postInstall": {
+    "note": "OpenClaw container is running. Click Terminal to open a shell, then run: openclaw onboard --install-daemon"
+  },
+  "form": []
+}

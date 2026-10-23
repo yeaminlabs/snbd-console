@@ -1,0 +1,19 @@
+{
+  "id": "wordpress",
+  "name": "WordPress",
+  "tag": "Website",
+  "desc": "The world's most popular CMS. Runs with MySQL in Docker.",
+  "version": "latest",
+  "type": "compose",
+  "installDir": "/opt/snbd/apps/wordpress",
+  "containerName": "snbd-wordpress",
+  "check": "docker ps --format '{{.Names}}' | grep -qx snbd-wordpress",
+  "postInstall": {
+    "note": "WordPress is running at http://<server-ip>:${WP_PORT}. Open that URL to complete the installation wizard."
+  },
+  "form": [
+    { "key": "WP_PORT", "label": "HTTP port", "type": "number", "default": "8080", "required": true },
+    { "key": "MYSQL_ROOT_PASSWORD", "label": "MySQL root password", "type": "password", "default": "", "required": true },
+    { "key": "MYSQL_PASSWORD", "label": "WordPress DB password", "type": "password", "default": "", "required": true }
+  ]
+}

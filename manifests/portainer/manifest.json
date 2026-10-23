@@ -1,0 +1,17 @@
+{
+  "id": "portainer",
+  "name": "Portainer CE",
+  "tag": "Tools",
+  "desc": "GUI for managing Docker containers, images, volumes, and networks.",
+  "version": "latest",
+  "type": "compose",
+  "installDir": "/opt/snbd/apps/portainer",
+  "containerName": "snbd-portainer",
+  "check": "docker ps --format '{{.Names}}' | grep -qx snbd-portainer",
+  "postInstall": {
+    "note": "Portainer is running at http://127.0.0.1:${PORTAINER_PORT} (use SSH tunnel). Create an admin account on first visit."
+  },
+  "form": [
+    { "key": "PORTAINER_PORT", "label": "HTTP port", "type": "number", "default": "9000", "required": true }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "id": "nginx-proxy-manager",
+  "name": "Nginx Proxy Manager",
+  "tag": "Web Server",
+  "desc": "GUI for managing Nginx reverse proxies, SSL certificates, and redirects.",
+  "version": "latest",
+  "type": "compose",
+  "installDir": "/opt/snbd/apps/nginx-proxy-manager",
+  "containerName": "snbd-nginx-proxy-manager",
+  "check": "docker ps --format '{{.Names}}' | grep -qx snbd-nginx-proxy-manager",
+  "postInstall": {
+    "note": "Nginx Proxy Manager admin UI is at http://<server-ip>:${NPM_ADMIN_PORT} — default login: admin@example.com / changeme. Ports ${NPM_HTTP_PORT} and ${NPM_HTTPS_PORT} serve proxied traffic."
+  },
+  "form": [
+    { "key": "NPM_HTTP_PORT", "label": "HTTP port (public)", "type": "number", "default": "80", "required": true },
+    { "key": "NPM_HTTPS_PORT", "label": "HTTPS port (public)", "type": "number", "default": "443", "required": true },
+    { "key": "NPM_ADMIN_PORT", "label": "Admin UI port", "type": "number", "default": "81", "required": true }
+  ]
+}
