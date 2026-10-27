@@ -58,6 +58,16 @@ export interface McpInfo { url: string; connections: McpConnection[]; connectedC
 export interface ActivityItem { id: number; action: string; at: string; server: string }
 export interface ImportResult { serverId: string; token: string; expiresInMinutes: number; panelUrl: string }
 export interface VpsPlan { id: number; name: string; description: string; price: string | null; cycle: string | null; orderUrl: string }
+export interface SshKey {
+  id: string;
+  name: string;
+  keyType: string;
+  publicKey: string;
+  fingerprint: string;
+  privateGenerated: boolean;
+  createdAt: string;
+  servers: { id: string; name: string; agentOnline: boolean }[];
+}
 
 async function json<T>(res: Response): Promise<T> {
   const body = await res.json().catch(() => ({}));
@@ -101,5 +111,10 @@ export const api = {
   oauthDeny: (id: string) => post(`/api/oauth/request/${id}/deny`, {}).then(json<{ redirect: string }>),
   importServer: (name: string) => post('/api/servers/import', { name }).then(json<ImportResult>),
   vpsPlans: () => fetch('/api/vps-plans').then(json<{ plans: VpsPlan[]; stale?: boolean }>),
+  keys: () => fetch('/api/keys').then(json<{ keys: SshKey[] }>),
+  createKey: (name: string, mode: 'generate' | 'import', publicKey?: string) => post('/api/keys', { name, mode, publicKey }).then(json<{ key: SshKey; privateKey: string | null }>),
+  deleteKey: (id: string) => fetch(`/api/keys/${id}`, { method: 'DELETE' }).then(json<{ ok: true }>),
+  installKey: (id: string, serverIds: string[]) => post(`/api/keys/${id}/install`, { serverIds }).then(json<{ ok: true }>),
+  uninstallKey: (id: string, serverIds: string[]) => post(`/api/keys/${id}/uninstall`, { serverIds }).then(json<{ ok: true }>),
   aiSession: (serverId: string) => post(`/api/servers/${serverId}/ai-session`, {}).then(json<{ token: string }>),
 };

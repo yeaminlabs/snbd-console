@@ -6,7 +6,7 @@ const soon = (label: string, icon: ReactNode) => (
   <span className="nav-item disabled" aria-disabled="true" title={`${label} — coming soon`}>{icon}{label}<span className="soon">Soon</span></span>
 );
 
-export function Shell({ me, onSignedOut, children, active = 'servers' }: { me: Me; onSignedOut: () => void; children: ReactNode; active?: 'servers' | 'activity' | 'agents' }) {
+export function Shell({ me, onSignedOut, children, active = 'servers' }: { me: Me; onSignedOut: () => void; children: ReactNode; active?: 'servers' | 'keys' | 'activity' | 'agents' }) {
   return (
     <>
       <header className="top">
@@ -24,7 +24,7 @@ export function Shell({ me, onSignedOut, children, active = 'servers' }: { me: M
       <div className="layout">
         <nav className="side" aria-label="Main">
           <a href="#/" className={`nav-item ${active === 'servers' ? 'on' : ''}`} aria-current={active === 'servers' ? 'page' : undefined}><IconServers />Servers</a>
-          {soon('SSH keys', <IconKey />)}
+          <a href="#/keys" className={`nav-item ${active === 'keys' ? 'on' : ''}`} aria-current={active === 'keys' ? 'page' : undefined}><IconKey />SSH keys</a>
           {soon('Backups', <IconBackup />)}
           <a href="#/agents" className={`nav-item ${active === 'agents' ? 'on' : ''}`} aria-current={active === 'agents' ? 'page' : undefined}><IconBot />MCP server</a>
           <a href="#/activity" className={`nav-item ${active === 'activity' ? 'on' : ''}`} aria-current={active === 'activity' ? 'page' : undefined}><IconActivity />Activity</a>

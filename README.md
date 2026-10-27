@@ -11,6 +11,7 @@ The project contains a React frontend, a TypeScript API backed by PostgreSQL, an
 - **File manager:** browse, edit text files, upload/download, create folders, rename, and delete. Text edits support files up to 2 MB; uploads support files up to 200 MB.
 - **Application installer:** recipes for Claude Code, Hermes Agent, OpenClaw, Docker, Node.js 22, n8n, and Ollama, with progress, logs, and cancellation.
 - **Server management:** connect an existing VPS, reset its root password, and use provider-supported power and OS reinstall controls.
+- **SSH keys:** generate an Ed25519 keypair (the private half is shown once, never stored) or import an existing public key, then install or remove it on any console-connected VPS through the agent. Deleting a key removes it from every machine it was installed on.
 - **Hetzner Cloud:** provision, suspend/unsuspend, resize, rebuild, and delete servers through the provider adapter.
 - **WHMCS integration:** signed, idempotent lifecycle webhooks that provision the VPS and create a panel login, plus one-click SSO and password reset.
 - **AI connectors:** scoped personal API tokens and OAuth authorization for MCP tools, with full access to the servers the customer approves.

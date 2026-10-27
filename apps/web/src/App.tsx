@@ -10,6 +10,7 @@ import { Activity } from './pages/Activity';
 import { Agents } from './pages/Agents';
 import { Authorize } from './pages/Authorize';
 import { AiPage } from './pages/AiPage';
+import { Keys } from './pages/Keys';
 import { Shell } from './components/Shell';
 import { TerminalPage } from './pages/TerminalPage';
 
@@ -37,6 +38,7 @@ export function App() {
 
   if (route === '/authorize') return <Authorize id={new URLSearchParams(query).get('req') ?? ''} />;
   if (route === '/agents') return <Shell me={me} onSignedOut={() => setMe(null)} active="agents"><Agents /></Shell>;
+  if (route === '/keys') return <Shell me={me} onSignedOut={() => setMe(null)} active="keys"><Keys /></Shell>;
   if (route === '/activity') return <Shell me={me} onSignedOut={() => setMe(null)} active="activity"><Activity /></Shell>;
   const match = route.match(/^\/servers\/([0-9a-f-]{36})(\/terminal|\/reinstall|\/files|\/apps|\/ai)?$/);
   return (
