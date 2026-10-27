@@ -107,6 +107,7 @@ export function registerTokens(app: FastifyInstance) {
                 t.created_at as "createdAt", t.expires_at as "expiresAt", null::text as "clientName"
          from api_tokens t
          where t.client_id = $1 and t.revoked_at is null and t.last_used_at is not null
+           and (t.expires_at is null or t.expires_at > now())   -- an expired key is not a live connection
            and t.name <> 'AI session'            -- the in-panel chat's short-lived keys are not a connection
          union all
          select g.id, 'connector', g.name, 'read', g.server_ids,
