@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api, type McpInfo, type Metrics, type Server } from '../api';
 import { ServerHeader } from '../components/ServerHeader';
-import { Badge } from '../components/Badge';
 import { IconBot } from '../components/Icons';
-import { ago, gb, planLabel, uptimeLabel } from '../format';
+import { ago, gb, uptimeLabel } from '../format';
 
 function Stat({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
@@ -155,9 +154,7 @@ export function Overview({ serverId }: { serverId: string }) {
         </div>
         <div className="side-col">
           <section className="card pad-lg" aria-labelledby="acc-h">
-            <h2 id="acc-h" className="card-title">Access</h2>
-            <Kv k="IPv4"><span className="mono">{server?.ip ?? '—'}</span></Kv>
-            <Kv k="User"><span className="mono">root</span></Kv>
+            <h2 id="acc-h" className="card-title">Root password</h2>
             <Kv k="Password"><span className="muted">Not stored, reset to get a new one</span></Kv>
             {newPassword ? (
               <div style={{ marginTop: 12 }}>
@@ -174,19 +171,9 @@ export function Overview({ serverId }: { serverId: string }) {
                 {pwError && <p className="error" role="alert" style={{ margin: '8px 0 0' }}>{pwError}</p>}
               </div>
             )}
-            {server?.ip && <div className="codebox mono" style={{ marginTop: 16 }}>ssh root@{server.ip}</div>}
-          </section>
-          <section className="card pad-lg" aria-labelledby="spec-h">
-            <h2 id="spec-h" className="card-title">Specs</h2>
-            <Kv k="Plan">{planLabel(server?.plan ?? {})}</Kv>
-            <Kv k="System">{server?.os ?? '—'}</Kv>
-            <Kv k="Added">{server ? new Date(server.created_at).toLocaleDateString() : '—'}</Kv>
           </section>
           <section className="card pad-lg" aria-labelledby="ag-h">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 id="ag-h" className="card-title">Panel agent</h2>
-              <Badge cls={server?.agentConnected ? 'ok' : 'off'}>{server?.agentConnected ? 'Connected' : 'Offline'}</Badge>
-            </div>
+            <h2 id="ag-h" className="card-title">Panel agent</h2>
             <Kv k="Version"><span className="mono">{server?.agent_version ?? '—'}</span></Kv>
             <Kv k="Last heartbeat">{ago(server?.last_seen_at)}</Kv>
             <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>Terminal, files and app installs run through this outbound connection.</div>
