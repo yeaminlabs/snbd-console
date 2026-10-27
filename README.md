@@ -17,7 +17,7 @@ The project contains a React frontend, a TypeScript API backed by PostgreSQL, an
 - **AI connectors:** scoped personal API tokens and OAuth authorization for MCP tools, with full access to the servers the customer approves.
 - **Operations:** signed agent releases, agent key rotation, offline/recovery alerts, audit logs, retention cleanup, and database backup/restore scripts.
 
-**Current limits:** BDIX is a placeholder adapter and does not provision VMs. Hetzner refuses to provision in production when `HETZNER_API_TOKEN` is missing (development still falls back to the stub). MCP exposes read tools plus commands, file writes and service restarts; creating or deleting servers is not exposed. CloudPanel is a deployment option for the panel, not an included application recipe. Use the [staging checklist](docs/STAGING.md) to validate real provider operations and app installations before serving customers.
+**Current limits:** BDIX (Proxmox) can manage an already-existing VM — suspend/unsuspend/terminate/resize/power — once it's linked via the WHMCS module's "attach" field, but cannot yet create one for a brand-new order; see [docs/BDIX.md](docs/BDIX.md). Without `PROXMOX_URL`/`PROXMOX_TOKEN_ID`/`PROXMOX_TOKEN_SECRET` it falls back to an inert stub in development and refuses outright in production. Hetzner refuses to provision in production when `HETZNER_API_TOKEN` is missing (development still falls back to the stub). MCP exposes read tools plus commands, file writes and service restarts; creating or deleting servers is not exposed. CloudPanel is a deployment option for the panel, not an included application recipe. Use the [staging checklist](docs/STAGING.md) to validate real provider operations and app installations before serving customers.
 
 ## Architecture
 
@@ -142,6 +142,7 @@ Choose a deployment guide:
 - [Docker with CloudPanel](docs/DOCKER.md): panel and PostgreSQL containers behind an HTTPS reverse proxy. The image applies migrations on startup. The guide includes details for the existing deployment; substitute your own domain, host, and paths.
 - [CloudPanel deployment](docs/CLOUDPANEL.md): automated systemd installation and a manual alternative.
 - [Staging checklist](docs/STAGING.md): end-to-end checks for provisioning, agents, WHMCS, alerts, backups, and restore.
+- [BDIX / Proxmox integration](docs/BDIX.md): what's real today (suspend/unsuspend/terminate/resize/power against an existing VM) versus not yet built (new-order auto-provisioning), how linking an existing customer works, and the host's actual IP/storage/template layout.
 
 The systemd files, Caddy example, and production environment template are in `deploy/`. `scripts/install-production.sh --help` lists installer options; `--dry-run` previews its changes. Serve the panel over HTTPS, proxy WebSockets, and allow the required upload size. OAuth connectors also need `/.well-known/oauth-*` discovery routes to reach the API; see the nginx example in the Docker guide.
 
