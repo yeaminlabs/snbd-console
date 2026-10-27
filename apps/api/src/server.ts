@@ -110,8 +110,20 @@ app.get('/api/me', async (req, reply) => {
 
 // ---- servers --------------------------------------------------------------
 
-const serverCols = `s.id, s.name, s.provider, s.status, host(s.ip) as ip, s.region, s.plan, s.os, s.created_at, s.suspended_at, s.reinstall_started_at`;
+const serverCols = `s.id, s.name, s.provider, s.status, host(s.ip) as ip, s.region, s.plan, s.os, s.created_at, s.suspended_at, s.reinstall_started_at, s.whmcs_service_id`;
 const latestCpu = `(select cpu from heartbeats h where h.server_id = s.id order by at desc limit 1) as cpu`;
+
+// Where a server came from decides who owns its lifecycle:
+//   whmcs    - provisioned by the WHMCS module; only WHMCS may suspend/terminate it
+//   imported - connected by the client with the enroll script; safe to unlink from the panel
+//   panel    - created by the panel's own provider adapter (not billing-managed)
+type ManagedBy = 'whmcs' | 'imported' | 'panel';
+
+function withSource<T extends { provider: string; whmcs_service_id: number | null }>(row: T) {
+  const { whmcs_service_id: whmcsServiceId, ...rest } = row;
+  const managedBy: ManagedBy = whmcsServiceId ? 'whmcs' : row.provider === 'imported' ? 'imported' : 'panel';
+  return { ...rest, whmcsServiceId, managedBy };
+}
 
 async function ownedServerId(client: { id: string }, id: string): Promise<boolean> {
   if (!z.string().uuid().safeParse(id).success) return false;
@@ -122,7 +134,7 @@ app.get('/api/servers', async (req, reply) => {
   const client = await clientFromRequest(req);
   if (!client) return reply.code(401).send({ error: 'Not signed in' });
   const { rows } = await pool.query(`select ${serverCols}, ${latestCpu} from servers s where s.client_id = $1 and s.terminated_at is null order by s.created_at desc`, [client.id]);
-  return rows.map((r) => ({ ...r, agentConnected: agents.has(r.id) }));
+  return rows.map((r) => ({ ...withSource(r), agentConnected: agents.has(r.id) }));
 });
 
 app.get<{ Params: { id: string } }>('/api/servers/:id', async (req, reply) => {
@@ -138,13 +150,43 @@ app.get<{ Params: { id: string } }>('/api/servers/:id', async (req, reply) => {
   const adapter = getAdapter(rows[0].provider);
   const agentConnected = agents.has(rows[0].id);
   return {
-    ...rows[0],
+    ...withSource(rows[0]),
     agentConnected,
     capabilities: {
       ...adapter.capabilities,
       rebuild: adapter.capabilities.rebuild || agentConnected || !!rows[0].reinstall_started_at,
     },
   };
+});
+
+// Unlink a server the client connected themselves. The machine is left untouched: this only drops
+// the panel's keys and tokens and hides the server. A WHMCS service is refused - deleting it here
+// would leave WHMCS billing for a server that no longer reports, so that lifecycle stays in WHMCS.
+app.delete<{ Params: { id: string } }>('/api/servers/:id', async (req, reply) => {
+  const client = await clientFromRequest(req);
+  if (!client) return reply.code(401).send({ error: 'Not signed in' });
+  if (!z.string().uuid().safeParse(req.params.id).success) return reply.code(404).send({ error: 'Not found' });
+  const { rows } = await pool.query(
+    'select provider, whmcs_service_id, terminated_at from servers where id = $1 and client_id = $2',
+    [req.params.id, client.id],
+  );
+  const server = rows[0];
+  if (!server || server.terminated_at) return reply.code(404).send({ error: 'Not found' });
+  if (server.whmcs_service_id) {
+    return reply.code(409).send({
+      error: 'This server belongs to a WHMCS service. Suspend or terminate it from WHMCS — the panel follows that status and won\'t delete it here.',
+    });
+  }
+  if (server.provider !== 'imported') {
+    return reply.code(409).send({ error: 'Only servers connected from an external source can be removed from the panel.' });
+  }
+
+  agents.get(req.params.id)?.socket.close(4005, 'removed from panel');
+  await pool.query('delete from agent_keys where server_id = $1', [req.params.id]);
+  await pool.query('delete from enroll_tokens where server_id = $1', [req.params.id]);
+  await pool.query(`update servers set terminated_at = now(), status = 'stopped', suspended_at = null where id = $1`, [req.params.id]);
+  await audit(client.id, req.params.id, 'server.removed');
+  return { ok: true };
 });
 
 // 24 hourly CPU averages (oldest first, null where the agent was silent) plus the latest reading.

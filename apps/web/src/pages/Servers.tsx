@@ -3,7 +3,7 @@ import { api, type ActivityItem, type ImportResult, type Server, type VpsPlan } 
 import { IconArrowUpRight, IconChevronRight, IconCopy } from '../components/Icons';
 import { Badge } from '../components/Badge';
 import { Modal } from '../components/Modal';
-import { planLabel, sourceLabel, statusOf, ago } from '../format';
+import { planLabel, sourceLabel, statusOf, secondaryStatus, joinList, ago } from '../format';
 
 const activityLabel: Record<string, string> = {
   'server.import': 'Server added',
@@ -110,7 +110,7 @@ export function Servers() {
   const count = (st: Server['status']) => servers?.filter((s) => s.status === st && !s.suspended_at).length ?? 0;
   const vcpu = servers?.reduce((n, s) => n + (s.plan.vcpu ?? 0), 0) ?? 0;
   const ram = servers?.reduce((n, s) => n + (s.plan.ramGb ?? 0), 0) ?? 0;
-  const sources = new Set(servers?.map((s) => sourceLabel(s)[0].split(' · ')[0]));
+  const sources = [...new Set(servers?.map((s) => sourceLabel(s)[0].split(' · ')[0]))].sort();
 
   return (
     <>
@@ -118,7 +118,7 @@ export function Servers() {
         <div>
           <h1>Servers</h1>
           <div className="muted" style={{ marginTop: 4 }}>
-            {servers ? `${servers.length} ${servers.length === 1 ? 'server' : 'servers'}${sources.size ? ' across ' + [...sources].join(' and ') : ''}` : 'Loading…'}
+            {servers ? `${servers.length} ${servers.length === 1 ? 'server' : 'servers'}${sources.length ? ' across ' + joinList(sources) : ''}` : 'Loading…'}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -155,6 +155,7 @@ export function Servers() {
               {servers?.map((s) => {
                 const [label, cls] = statusOf(s);
                 const [src, srcCls] = sourceLabel(s);
+                const secondary = secondaryStatus(s);
                 const cpu = Math.round(s.cpu ?? 0);
                 return (
                   <a className="srow" key={s.id} href={`#/servers/${s.id}`}>
@@ -165,7 +166,10 @@ export function Servers() {
                     <div><Badge cls={srcCls}>{src}</Badge></div>
                     <div className="muted">{planLabel(s.plan)}</div>
                     <div className="muted">{s.os ?? '—'}</div>
-                    <div><Badge cls={cls}>{label}</Badge></div>
+                    <div>
+                      <Badge cls={cls}>{label}</Badge>
+                      {secondary && <div className="muted" style={{ fontSize: 11, marginTop: 3 }}>{secondary[0]}</div>}
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
                         <div className="bar"><div style={{ width: `${cpu}%` }} /></div>

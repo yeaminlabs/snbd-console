@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api, type Server } from '../api';
 import { Badge } from './Badge';
-import { sourceLabel, statusOf } from '../format';
+import { sourceLabel, statusOf, secondaryStatus } from '../format';
 
 type Tab = 'overview' | 'terminal' | 'files' | 'apps' | 'reinstall' | 'ai';
 
@@ -40,6 +40,7 @@ export function ServerHeader({ server, tab, onChanged }: { server: Server | null
   const id = server?.id;
   const [status, statusCls] = server ? statusOf(server) : ['', 'off'];
   const [source, sourceCls] = server ? sourceLabel(server) : ['', 'info'];
+  const secondary = server ? secondaryStatus(server) : null;
   const tabs: [Tab, string, string][] = [
     ['overview', 'Overview', `#/servers/${id}`],
     ['terminal', 'Terminal', `#/servers/${id}/terminal`],
@@ -54,7 +55,7 @@ export function ServerHeader({ server, tab, onChanged }: { server: Server | null
       <div className="head-row">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <h1>{server?.name ?? '…'}</h1>
-          {server && <><Badge cls={statusCls}>{status}</Badge><Badge cls={sourceCls}>{source}</Badge></>}
+          {server && <><Badge cls={statusCls}>{status}</Badge><Badge cls={sourceCls}>{source}</Badge>{secondary && <Badge cls={secondary[1]}>{secondary[0]}</Badge>}</>}
         </div>
         {tab === 'overview' && server && (
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>

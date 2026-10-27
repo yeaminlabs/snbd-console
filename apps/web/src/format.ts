@@ -7,10 +7,21 @@ export const statusLabel: Record<Server['status'], [string, string]> = {
   stopped: ['Stopped', 'off'],
 };
 
-export function sourceLabel(s: Pick<Server, 'provider' | 'region'>): [string, string] {
+export function sourceLabel(s: Pick<Server, 'provider' | 'region' | 'managedBy'>): [string, string] {
+  // a WHMCS service is the source that matters: WHMCS owns suspend/terminate for it
+  if (s.managedBy === 'whmcs') {
+    const where = s.region || (s.provider === 'hetzner' ? 'Hetzner' : s.provider === 'bdix' ? 'BDIX' : '');
+    return [where ? `WHMCS · ${where}` : 'WHMCS', 'info'];
+  }
   if (s.provider === 'bdix') return [s.region ? `BDIX · ${s.region}` : 'BDIX', 'info'];
   if (s.provider === 'hetzner') return [s.region ? `Hetzner · ${s.region}` : 'Hetzner', 'off'];
   return ['Imported', 'off'];
+}
+
+// "a" | "a and b" | "a, b and c"
+export function joinList(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? '';
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 }
 
 export function planLabel(p: Plan): string {
@@ -38,5 +49,18 @@ export function ago(iso: string | null | undefined): string {
 }
 
 // a suspended service overrides whatever the agent last reported
-export const statusOf = (s: Pick<Server, 'status' | 'suspended_at' | 'reinstall_started_at'>): [string, string] =>
-  s.suspended_at ? ['Suspended', 'warn'] : s.reinstall_started_at ? ['Reinstalling', 'warn'] : statusLabel[s.status];
+export const statusOf = (s: Pick<Server, 'status' | 'suspended_at' | 'reinstall_started_at' | 'managedBy'>): [string, string] => {
+  if (s.suspended_at) return ['Suspended', 'warn'];
+  if (s.reinstall_started_at) return ['Reinstalling', 'warn'];
+  // for a WHMCS service the billing state is the status: active until WHMCS suspends it
+  if (s.managedBy === 'whmcs') return s.status === 'provisioning' ? ['Provisioning', 'warn'] : ['Active', 'ok'];
+  return statusLabel[s.status];
+};
+
+// What the panel sees beyond the billing state (only meaningful while the service is active)
+export function secondaryStatus(s: Pick<Server, 'managedBy' | 'status' | 'agentConnected' | 'suspended_at'>): [string, string] | null {
+  if (s.managedBy !== 'whmcs' || s.suspended_at) return null;
+  if (s.status === 'stopped') return ['Powered off', 'off'];
+  if (s.status === 'running' && !s.agentConnected) return ['Agent offline', 'warn'];
+  return null;
+}

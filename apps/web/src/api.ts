@@ -6,6 +6,9 @@ export interface Server {
   id: string;
   name: string;
   provider: 'bdix' | 'hetzner' | 'imported';
+  /** Who owns the lifecycle: WHMCS services can only be stopped from WHMCS. */
+  managedBy: 'whmcs' | 'imported' | 'panel';
+  whmcsServiceId: number | null;
   status: 'provisioning' | 'running' | 'agent_offline' | 'stopped';
   ip: string | null;
   region: string | null;
@@ -52,6 +55,7 @@ export const api = {
   logout: () => fetch('/api/logout', { method: 'POST' }),
   servers: () => fetch('/api/servers').then(json<Server[]>),
   server: (id: string) => fetch(`/api/servers/${id}`).then(json<Server>),
+  removeServer: (id: string) => fetch(`/api/servers/${id}`, { method: 'DELETE' }).then(json<{ ok: true }>),
   metrics: (id: string) => fetch(`/api/servers/${id}/metrics`).then(json<Metrics>),
   activity: () => fetch('/api/activity').then(json<ActivityItem[]>),
   osImages: () => fetch('/api/os-images').then(json<OsImage[]>),

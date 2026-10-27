@@ -38,6 +38,21 @@ export function Overview({ serverId }: { serverId: string }) {
   const [pwBusy, setPwBusy] = useState(false);
   const [pwError, setPwError] = useState('');
   const [pwCopied, setPwCopied] = useState(false);
+
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState('');
+  async function removeFromPanel() {
+    if (!confirm(`Remove ${server?.name ?? 'this server'} from the panel?\n\nThe machine keeps running and nothing is deleted on it. The panel stops monitoring it and its agent can no longer reconnect.`)) return;
+    setRemoving(true); setRemoveError('');
+    try {
+      await api.removeServer(serverId);
+      location.hash = '#/';
+    } catch (e) {
+      setRemoveError((e as Error).message);
+    } finally {
+      setRemoving(false);
+    }
+  }
   async function resetPassword() {
     if (!confirm('Set a new root password? The old one stops working immediately.')) return;
     setPwBusy(true); setPwError('');
@@ -146,6 +161,34 @@ export function Overview({ serverId }: { serverId: string }) {
             <Kv k="Last heartbeat">{ago(server?.last_seen_at)}</Kv>
             <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>Terminal, files and app installs run through this outbound connection.</div>
           </section>
+          {server && (
+            <section className="card pad-lg" aria-labelledby="rm-h">
+              <h2 id="rm-h" className="card-title">Remove</h2>
+              {server.managedBy === 'whmcs' ? (
+                <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+                  Managed by WHMCS{server.whmcsServiceId ? ` (service #${server.whmcsServiceId})` : ''}. Suspend,
+                  unsuspend or terminate it in WHMCS — the panel follows that status and never deletes a
+                  billing-managed server.
+                </p>
+              ) : server.managedBy === 'imported' ? (
+                <>
+                  <p className="muted" style={{ margin: '0 0 12px', fontSize: 13 }}>
+                    Removing only unlinks this machine from the panel. It keeps running, and nothing is deleted on it.
+                    To stop the agent on the machine as well, run{' '}
+                    <span className="mono">systemctl disable --now snbd-agent</span> on it.
+                  </p>
+                  <button className="btn danger" onClick={removeFromPanel} disabled={removing}>
+                    {removing ? 'Removing…' : 'Remove from panel'}
+                  </button>
+                  {removeError && <p className="error" role="alert" style={{ margin: '8px 0 0' }}>{removeError}</p>}
+                </>
+              ) : (
+                <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+                  This server was created by the panel's provider, so it can only be removed by terminating its service.
+                </p>
+              )}
+            </section>
+          )}
         </div>
       </div>
     </>
