@@ -50,7 +50,8 @@ const call = async (c: Client, name: string, args: Record<string, unknown>) => c
 const c1 = await connect(tok);
 check('initialize: server info + instructions', c1.getServerVersion()?.name === 'snbd-console' && (c1.getInstructions() ?? '').includes('ask which one'));
 const tools = (await c1.listTools()).tools;
-check('four tools, all read-only', tools.map((t) => t.name).sort().join() === 'get_public_ip,list_servers,server_status,view_logs' && tools.every((t) => t.annotations?.readOnlyHint === true));
+check('nine tools: six read and three write', tools.map((t) => t.name).sort().join() === 'get_public_ip,list_files,list_servers,read_file,restart_service,run_command,server_status,view_logs,write_file');
+check('read tools are marked read-only', tools.filter((t) => t.annotations?.readOnlyHint !== true).map((t) => t.name).sort().join() === 'restart_service,run_command,write_file');
 
 const ls = JSON.parse(text(await call(c1, 'list_servers', {})));
 const alpha = ls.servers.find((s: any) => s.name === 'mcp-alpha'), beta = ls.servers.find((s: any) => s.name === 'mcp-beta');

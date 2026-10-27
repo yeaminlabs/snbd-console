@@ -29,15 +29,18 @@ export function Authorize({ id }: { id: string }) {
         {!info && !error && <p className="muted">Loading…</p>}
         {info && (
           <>
-            <h1 id="auth-h" style={{ fontSize: 26, margin: '12px 0 8px' }}>Allow {info.clientName}?</h1>
-            <p style={{ margin: '0 0 12px' }}>This app wants to look at your servers.</p>
+            <h1 id="auth-h" style={{ fontSize: 26, margin: '12px 0 8px' }}>Allow {info.clientName} full access?</h1>
+            <p style={{ margin: '0 0 12px' }}>This app will be able to read <b>and change</b> your servers.</p>
             <div className="warnbox" style={{ marginTop: 0 }}>
+              <b>Full access:</b> it can run commands, write files and restart services — the same control as signing in to this panel. Only approve an app you trust.
+            </div>
+            <div className="warnbox" style={{ marginTop: 12 }}>
               After you choose, you are sent back to <b>{info.returnsTo}</b>. Only continue if you just started this connection from that app.
             </div>
             <div className="kv"><span className="muted">Access</span><span>{info.access}</span></div>
-            <div className="kv"><span className="muted">Can change anything?</span><span>No</span></div>
+            <div className="kv"><span className="muted">Can change anything?</span><span>Yes — commands, files and services</span></div>
             <fieldset className="fieldset" style={{ marginTop: 16 }}>
-              <legend>Servers it can see</legend>
+              <legend>Servers it can control</legend>
               <label className="check"><input type="radio" name="scope" checked={!only} onChange={() => setOnly(false)} />All my servers</label>
               <label className="check"><input type="radio" name="scope" checked={only} onChange={() => setOnly(true)} />Only selected servers</label>
               {only && info.servers.map((s) => (
@@ -47,10 +50,10 @@ export function Authorize({ id }: { id: string }) {
               ))}
             </fieldset>
             <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
-              <button className="btn p" style={{ flex: 1 }} disabled={busy || (only && picked.length === 0)} onClick={() => finish(true)}>{busy ? 'Working…' : 'Allow'}</button>
+              <button className="btn p" style={{ flex: 1 }} disabled={busy || (only && picked.length === 0)} onClick={() => finish(true)}>{busy ? 'Working…' : 'Allow full access'}</button>
               <button className="btn" style={{ flex: 1 }} disabled={busy} onClick={() => finish(false)}>Cancel</button>
             </div>
-            <p className="muted" style={{ fontSize: 12, margin: '16px 0 0' }}>You can disconnect it at any time under AI agents.</p>
+            <p className="muted" style={{ fontSize: 12, margin: '16px 0 0' }}>You can disconnect it at any time under MCP server.</p>
           </>
         )}
       </section>

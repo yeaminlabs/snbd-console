@@ -26,11 +26,17 @@ export function Shell({ me, onSignedOut, children, active = 'servers' }: { me: M
           <a href="#/" className={`nav-item ${active === 'servers' ? 'on' : ''}`} aria-current={active === 'servers' ? 'page' : undefined}><IconServers />Servers</a>
           {soon('SSH keys', <IconKey />)}
           {soon('Backups', <IconBackup />)}
-          <a href="#/agents" className={`nav-item ${active === 'agents' ? 'on' : ''}`} aria-current={active === 'agents' ? 'page' : undefined}><IconBot />AI agents</a>
+          <a href="#/agents" className={`nav-item ${active === 'agents' ? 'on' : ''}`} aria-current={active === 'agents' ? 'page' : undefined}><IconBot />MCP server</a>
           <a href="#/activity" className={`nav-item ${active === 'activity' ? 'on' : ''}`} aria-current={active === 'activity' ? 'page' : undefined}><IconActivity />Activity</a>
           <h6>Account</h6>
           {soon('Billing & invoices', <IconReceipt />)}
           {soon('Support', <IconSupport />)}
+          <div className="side-promo">
+            <div className="side-promo-eyebrow">MCP server</div>
+            <div className="side-promo-title">Your assistant, your servers.</div>
+            <p>Claude Code or OpenCode can check status, read logs and restart services. Full access, every action logged.</p>
+            <a href="#/agents" className="side-promo-link">Connect an AI client →</a>
+          </div>
         </nav>
         <main className="content">{children}</main>
       </div>

@@ -7,24 +7,17 @@ import { baseUrl } from './oauth.js';
 import { authenticateToken, type TokenAuth } from './tokens.js';
 
 // Model Context Protocol over "Streamable HTTP", stateless: every POST is a JSON-RPC message (or a batch) answered with plain JSON.
-// Scopes: 'read' – no side effects; 'deploy' – write tools visible only to deploy-scoped tokens.
+// Every authenticated connection currently gets the full tool set; the scope column is recorded for future per-connection limits.
 
 const SUPPORTED_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const SERVER_INFO = { name: 'snbd-console', title: 'SNBD Console', version: '0.1.0' };
-
-const INSTRUCTIONS_READ = `You are connected to the customer's SNBD hosting panel. Their servers (VPS) are real machines, so be careful and honest.
-- If the customer has more than one server, call list_servers and ask which one they mean before doing anything on it.
-- A server must show agentOnline=true before its logs or IP can be read. If it is offline, say so; do not guess.
-- To tell the customer which DNS A record to add, call get_public_ip and use detectedPublicIp. If it differs from panelSawAgentIp, explain the difference and ask them to confirm.
-- Logs can contain private data. Summarise problems; do not paste secrets into the chat.
-- This token is read-only. Never claim you changed something on a server.`;
 
 const INSTRUCTIONS_DEPLOY = `You are connected to the customer's SNBD hosting panel. Their servers (VPS) are real machines, so be careful and honest.
 - If the customer has more than one server, call list_servers and ask which one they mean before doing anything on it.
 - A server must show agentOnline=true before you act on it. If it is offline, say so; do not proceed.
 - To tell the customer which DNS A record to add, call get_public_ip and use detectedPublicIp. If it differs from panelSawAgentIp, explain the difference and ask them to confirm.
 - Logs can contain private data. Summarise problems; do not paste secrets into the chat.
-- This token has write (deploy) access. You may run commands, write files, and restart services.
+- This connection has full access. You may run commands, write files, and restart services.
 - Always confirm with the customer before running destructive commands (rm, format, wipe, kill) or overwriting critical system files.
 - Prefer targeted operations (restart_service, write_file) over raw run_command when a specialised tool exists.
 - After a write operation, verify success by reading state back or checking a service status.`;
@@ -264,7 +257,7 @@ const TOOLS: ToolDef[] = [
       };
     },
   },
-  // ── Write tools (scope: deploy) ───────────────────────────────────────────
+  // ── Write tools (full access) ─────────────────────────────────────────────
   {
     name: 'run_command',
     title: 'Run command',
@@ -419,7 +412,7 @@ async function handleMessage(msg: any, auth: TokenAuth): Promise<object | null> 
 
 export function registerMcp(app: FastifyInstance) {
   app.post('/mcp', async (req, reply) => {
-    const auth = await authenticateToken(req.headers.authorization, req.ip);
+    const auth = await authenticateToken(req.headers.authorization, req.ip, req.headers['user-agent']);
     if (!auth) {
       return reply.code(401).header('www-authenticate', `Bearer realm="snbd-console", resource_metadata="${baseUrl(req)}/.well-known/oauth-protected-resource"`).send({ error: 'Missing, invalid, revoked or expired token' });
     }

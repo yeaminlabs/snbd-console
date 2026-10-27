@@ -51,7 +51,7 @@ async function issueTokens(grantId: string) {
   const access = TOKEN_PREFIX + rand(), refresh = TOKEN_PREFIX + 'r_' + rand();
   await pool.query(`insert into oauth_tokens (token_hash, grant_id, kind, expires_at) values ($1, $2, 'access', now() + make_interval(secs => $3)), ($4, $2, 'refresh', now() + make_interval(secs => $5))`,
     [sha256(access), grantId, ACCESS_TTL_S, sha256(refresh), REFRESH_TTL_S]);
-  return { access_token: access, token_type: 'Bearer', expires_in: ACCESS_TTL_S, refresh_token: refresh, scope: 'read' };
+  return { access_token: access, token_type: 'Bearer', expires_in: ACCESS_TTL_S, refresh_token: refresh, scope: 'full' };
 }
 
 const RegisterBody = z.object({
@@ -72,7 +72,7 @@ export function registerOAuth(app: FastifyInstance) {
   const resourceMeta = (req: FastifyRequest, reply: FastifyReply) => {
     cors(reply).header('cache-control', 'public, max-age=300');
     const b = baseUrl(req);
-    return { resource: `${b}/mcp`, authorization_servers: [b], bearer_methods_supported: ['header'], scopes_supported: ['read'], resource_name: 'SNBD Console' };
+    return { resource: `${b}/mcp`, authorization_servers: [b], bearer_methods_supported: ['header'], scopes_supported: ['full'], resource_name: 'SNBD Console' };
   };
   app.get('/.well-known/oauth-protected-resource', async (req, reply) => resourceMeta(req, reply));
   app.get('/.well-known/oauth-protected-resource/mcp', async (req, reply) => resourceMeta(req, reply));
@@ -90,7 +90,7 @@ export function registerOAuth(app: FastifyInstance) {
       grant_types_supported: ['authorization_code', 'refresh_token'],
       code_challenge_methods_supported: ['S256'],
       token_endpoint_auth_methods_supported: ['none'],
-      scopes_supported: ['read'],
+      scopes_supported: ['full'],
     };
   };
   app.get('/.well-known/oauth-authorization-server', serverMeta);
@@ -159,7 +159,7 @@ export function registerOAuth(app: FastifyInstance) {
     if (!r) return reply.code(404).send({ error: 'This approval request has expired. Start the connection again in the app.' });
     const servers = (await pool.query('select id, name from servers where client_id = $1 and terminated_at is null order by name', [me.id])).rows;
     const u = new URL(r.redirect_uri);
-    return { clientName: r.client_name, returnsTo: u.protocol === 'http:' || u.protocol === 'https:' ? u.host : `${u.protocol}//`, servers, access: 'Read only: servers, status, public IP and logs' };
+    return { clientName: r.client_name, returnsTo: u.protocol === 'http:' || u.protocol === 'https:' ? u.host : `${u.protocol}//`, servers, access: 'Full access: servers, logs, files, commands and services' };
   });
 
   const ApproveBody = z.object({ serverIds: z.array(z.string().uuid()).max(100).nullable().default(null) });

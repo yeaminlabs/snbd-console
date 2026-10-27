@@ -91,7 +91,7 @@ const aud = (await pool.query("select via from audit_log where server_id = $1 an
 check('actions are audited as the connector', aud.some((r) => r.via === 'Test App (connector)'));
 const listed = (await j('/api/tokens', { headers: { cookie } })).body as any[];
 const grant = listed.find((t) => t.kind === 'connector' && t.name === 'Test App (connector)');
-check('connector appears in the AI agents list', !!grant && grant.prefix === 'connector');
+check('connector appears in the MCP connections list', !!grant && grant.prefix === 'connector');
 check('connector token does not open the normal API', (await fetch(base + '/api/servers', { headers: { Authorization: `Bearer ${prov.tok.access_token}` } })).status === 401);
 await c1.close();
 

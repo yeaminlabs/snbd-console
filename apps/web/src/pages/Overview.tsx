@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type Metrics, type Server } from '../api';
+import { api, type McpInfo, type Metrics, type Server } from '../api';
 import { ServerHeader } from '../components/ServerHeader';
 import { Badge } from '../components/Badge';
 import { IconBot } from '../components/Icons';
@@ -21,6 +21,7 @@ const Kv = ({ k, children }: { k: string; children: React.ReactNode }) => (
 export function Overview({ serverId }: { serverId: string }) {
   const [server, setServer] = useState<Server | null>(null);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
+  const [mcp, setMcp] = useState<McpInfo | null>(null);
   const [error, setError] = useState('');
 
   const load = () => {
@@ -33,6 +34,8 @@ export function Overview({ serverId }: { serverId: string }) {
     const t = setInterval(load, 10000);
     return () => clearInterval(t);
   }, [serverId]);
+
+  useEffect(() => { api.mcpConnections().then(setMcp).catch(() => {}); }, []);
 
   const [newPassword, setNewPassword] = useState('');
   const [pwBusy, setPwBusy] = useState(false);
@@ -68,10 +71,37 @@ export function Overview({ serverId }: { serverId: string }) {
   const points = metrics?.points ?? [];
   const peak = Math.max(10, ...points.map((p) => p.cpu ?? 0));
   const [upN, upU] = latest ? uptimeLabel(latest.uptime) : ['—', ''];
+  const mcpLive = mcp?.connections.filter((c) => c.connected) ?? [];
+  const mcpNames = [...new Set(mcpLive.map((c) => c.name))];
+  const mcpName = mcpNames[0];
+  const mcpHeadline = mcpNames.length === 0 ? 'Ask your AI about this server'
+    : mcpNames.length === 1 ? `${mcpNames[0]} is connected`
+      : mcpNames.length === 2 ? `${mcpNames[0]} and ${mcpNames[1]} are connected`
+        : `${mcpNames.length} AI clients are connected`;
 
   return (
     <>
       <ServerHeader server={server} tab="overview" onChanged={load} />
+      <section className="card mcp-promo" aria-labelledby="mcp-promo-h">
+        <div className="mcp-promo-copy">
+          <div className="mcp-promo-head">
+            <span className="mcp-promo-badge">MCP server</span>
+            {mcpLive.length > 0 && (
+              <span className="mcp-promo-live"><span className="mcp-dot on" aria-hidden="true" />{mcpLive.length} live</span>
+            )}
+          </div>
+          <h2 id="mcp-promo-h" className="card-title">{mcpHeadline}</h2>
+          <p className="muted">
+            {mcpName
+              ? `Ask ${mcpName} “why is ${server?.name ?? 'this server'} slow?” or “restart nginx” — it can read live status and logs, run commands and manage services.`
+              : 'Connect Claude Code, Claude or OpenCode once. It can read status, logs and files, run commands and restart services — revocable at any time.'}
+          </p>
+        </div>
+        <div className="mcp-promo-cta">
+          <a className="btn p" href="#/agents">{mcpName ? 'Manage MCP connections' : 'Connect an AI client'}</a>
+          <div className="mcp-promo-foot muted">Full access · every action logged in Activity</div>
+        </div>
+      </section>
       <div className="cols">
         <div className="main-col">
           <section className="card pad-lg" aria-labelledby="cpu-h">

@@ -14,3 +14,6 @@ export const IconArrowUpRight = icon(<path d="M7 17L17 7M9 7h8v8" />);
 export const IconBot = icon(<><rect x="4" y="8" width="16" height="11" rx="3" /><path d="M12 4v4M9 13h.01M15 13h.01M9.5 16.5h5" /></>);
 export const IconClose = icon(<path d="M6 6l12 12M18 6L6 18" />);
 export const IconChevronRight = icon(<path d="M9 6l6 6-6 6" />);
+export const IconFile = icon(<><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /></>);
+export const IconTerminal = icon(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 9l3 3-3 3M13 15h4" /></>);
+export const IconRestart = icon(<><path d="M20 12a8 8 0 1 1-2.34-5.66" /><path d="M20 4v5h-5" /></>);

@@ -2,7 +2,7 @@
 
 A self-hosted VPS management panel for SNBD Host. Customers can connect existing Linux servers, open a browser terminal, manage files, install applications, and monitor their servers. Hetzner Cloud provisioning and a WHMCS module connect the panel to a hosting business's ordering and billing workflow.
 
-The project contains a React frontend, a TypeScript API backed by PostgreSQL, and a Go agent that runs on each managed VPS. It also exposes read-only server tools to AI assistants through the Model Context Protocol (MCP).
+The project contains a React frontend, a TypeScript API backed by PostgreSQL, and a Go agent that runs on each managed VPS. It also exposes server tools to AI assistants through the Model Context Protocol (MCP), including commands and service restarts.
 
 ## Features
 
@@ -13,10 +13,10 @@ The project contains a React frontend, a TypeScript API backed by PostgreSQL, an
 - **Server management:** connect an existing VPS, reset its root password, and use provider-supported power and OS reinstall controls.
 - **Hetzner Cloud:** provision, suspend/unsuspend, resize, rebuild, and delete servers through the provider adapter.
 - **WHMCS integration:** signed, idempotent lifecycle webhooks that provision the VPS and create a panel login, plus one-click SSO and password reset.
-- **AI connectors:** scoped personal API tokens and OAuth authorization for read-only MCP tools.
+- **AI connectors:** scoped personal API tokens and OAuth authorization for MCP tools, with full access to the servers the customer approves.
 - **Operations:** signed agent releases, agent key rotation, offline/recovery alerts, audit logs, retention cleanup, and database backup/restore scripts.
 
-**Current limits:** BDIX is a placeholder adapter and does not provision VMs. Hetzner refuses to provision in production when `HETZNER_API_TOKEN` is missing (development still falls back to the stub). MCP currently exposes read-only tools; deployment and other write tools are not implemented. CloudPanel is a deployment option for the panel, not an included application recipe. Use the [staging checklist](docs/STAGING.md) to validate real provider operations and app installations before serving customers.
+**Current limits:** BDIX is a placeholder adapter and does not provision VMs. Hetzner refuses to provision in production when `HETZNER_API_TOKEN` is missing (development still falls back to the stub). MCP exposes read tools plus commands, file writes and service restarts; creating or deleting servers is not exposed. CloudPanel is a deployment option for the panel, not an included application recipe. Use the [staging checklist](docs/STAGING.md) to validate real provider operations and app installations before serving customers.
 
 ## Architecture
 
@@ -201,9 +201,9 @@ This requires `HETZNER_API_TOKEN` in the command's environment. To exercise the 
 
 ### AI assistants (MCP)
 
-The **AI agents** page creates revocable tokens scoped to the customer's servers. MCP clients connect to `https://<panel>/mcp` with a bearer token, or use OAuth authorization with PKCE where supported.
+The **MCP server** page creates revocable tokens scoped to the customer's servers. MCP clients connect to `https://<panel>/mcp` with a bearer token, or use OAuth authorization with PKCE where supported.
 
-Available tools: `list_servers`, `server_status`, `get_public_ip`, and `view_logs`. They cannot deploy applications or execute arbitrary commands. See [MCP and OAuth setup](docs/MCP.md) for client configuration, permissions, proxy requirements, and protocol details.
+Available tools: `list_servers`, `server_status`, `get_public_ip`, `view_logs`, `list_files` and `read_file` for inspection; `run_command`, `write_file` and `restart_service` for changes. **Every connection has full access** to the servers it was approved for — the approval page says so, and every action is recorded in Activity. MCP cannot create or delete servers. See [MCP and OAuth setup](docs/MCP.md) for client configuration, permissions, proxy requirements, and protocol details.
 
 ## Verification
 

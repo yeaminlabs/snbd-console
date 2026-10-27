@@ -36,6 +36,25 @@ export interface JobState { status: 'queued' | 'running' | 'done' | 'failed'; ap
 export interface AuditItem { id: number; action: string; at: string; meta: Record<string, any>; system: boolean; via: string | null; serverId: string; server: string }
 export interface OAuthRequestInfo { clientName: string; returnsTo: string; servers: { id: string; name: string }[]; access: string }
 export interface TokenInfo { kind: 'token' | 'connector'; id: string; name: string; prefix: string; scope: 'read' | 'deploy'; serverIds: string[] | null; serverNames: string[]; expiresAt: string | null; lastUsedAt: string | null; createdAt: string }
+export interface McpConnection {
+  id: string;
+  kind: 'token' | 'connector';
+  /** Friendly client name, e.g. "Claude Code" or "OpenCode". */
+  name: string;
+  clientKind: string;
+  version: string | null;
+  os: string | null;
+  ip: string | null;
+  scope: 'read' | 'deploy';
+  /** null = every server on the account. */
+  servers: string[] | null;
+  serverNames: string[];
+  lastSeenAt: string | null;
+  createdAt: string;
+  expiresAt: string | null;
+  connected: boolean;
+}
+export interface McpInfo { url: string; connections: McpConnection[]; connectedCount: number }
 export interface ActivityItem { id: number; action: string; at: string; server: string }
 export interface ImportResult { serverId: string; token: string; expiresInMinutes: number; panelUrl: string }
 export interface VpsPlan { id: number; name: string; description: string; price: string | null; cycle: string | null; orderUrl: string }
@@ -74,6 +93,7 @@ export const api = {
   resetPassword: (id: string) => post(`/api/servers/${id}/password-reset`, {}).then(json<{ user: string; password: string }>),
   audit: (server: string, before: number | null) => fetch(`/api/audit?limit=50${server ? `&server=${server}` : ''}${before ? `&before=${before}` : ''}`).then(json<{ items: AuditItem[]; next: number | null }>),
   tokens: () => fetch('/api/tokens').then(json<TokenInfo[]>),
+  mcpConnections: () => fetch('/api/mcp/connections').then(json<McpInfo>),
   createToken: (name: string, serverIds: string[] | null, expiresInDays: number | null) => post('/api/tokens', { name, serverIds, expiresInDays }).then(json<{ id: string; token: string; expiresAt: string | null }>),
   revokeToken: (id: string) => fetch(`/api/tokens/${id}`, { method: 'DELETE' }).then(json<{ ok: true }>),
   oauthRequest: (id: string) => fetch(`/api/oauth/request/${id}`).then(json<OAuthRequestInfo>),
