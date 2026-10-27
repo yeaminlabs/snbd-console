@@ -3,6 +3,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"sync"
@@ -22,6 +23,12 @@ func env(key, def string) string {
 }
 
 func main() {
+	// `--version` must print and exit: without this the flag was ignored and a second, hidden
+	// agent started dialling the panel, replacing the real one's connection every minute
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-version" || os.Args[1] == "version") {
+		fmt.Println(version)
+		return
+	}
 	panelURL := env("PANEL_URL", "")
 	if panelURL == "" {
 		log.Fatal("PANEL_URL is required, e.g. wss://panel.example.com/agent")
