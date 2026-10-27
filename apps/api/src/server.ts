@@ -135,7 +135,16 @@ app.get<{ Params: { id: string } }>('/api/servers/:id', async (req, reply) => {
     [req.params.id, client.id],
   );
   if (!rows[0]) return reply.code(404).send({ error: 'Not found' });
-  return { ...rows[0], agentConnected: agents.has(rows[0].id), capabilities: getAdapter(rows[0].provider).capabilities };
+  const adapter = getAdapter(rows[0].provider);
+  const agentConnected = agents.has(rows[0].id);
+  return {
+    ...rows[0],
+    agentConnected,
+    capabilities: {
+      ...adapter.capabilities,
+      rebuild: adapter.capabilities.rebuild || agentConnected || !!rows[0].reinstall_started_at,
+    },
+  };
 });
 
 // 24 hourly CPU averages (oldest first, null where the agent was silent) plus the latest reading.

@@ -1,6 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type SyntheticEvent } from 'react';
 import { api, type OsImage, type Server } from '../api';
 import { ServerHeader } from '../components/ServerHeader';
+
+// servers.os holds a provider image slug (ubuntu-24.04) or a detected name ("Ubuntu 24.04")
+function currentOs(systems: OsImage[], os: string | null | undefined) {
+  if (!os) return undefined;
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9.]/g, '');
+  const n = norm(os);
+  return systems.find((o) => norm(o.image) === n)
+    ?? systems.find((o) => n.includes(norm(o.name)) && n.includes(norm(o.ver.split(' ')[0])));
+}
 
 export function Reinstall({ serverId }: { serverId: string }) {
   const [server, setServer] = useState<Server | null>(null);
@@ -22,7 +31,7 @@ export function Reinstall({ serverId }: { serverId: string }) {
   }, [serverId]);
 
   const chosen = systems.find((o) => o.image === sel);
-  const current = systems.find((o) => o.image === server?.os);
+  const current = currentOs(systems, server?.os);
   const inProgress = !!server?.reinstall_started_at || started;
   const finished = started && !!server && !server.reinstall_started_at && server.status === 'running';
   const supported = server?.capabilities?.rebuild;
@@ -46,10 +55,17 @@ export function Reinstall({ serverId }: { serverId: string }) {
     try { await navigator.clipboard.writeText(password ?? ''); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* the password stays selectable */ }
   }
 
+  function logoFallback(e: SyntheticEvent<HTMLImageElement>, o: OsImage) {
+    const img = e.currentTarget;
+    if (img.dataset.fallback) { img.style.visibility = 'hidden'; return; }
+    img.dataset.fallback = '1';
+    img.src = o.fallbackLogo;
+  }
+
   return (
     <>
       <ServerHeader server={server} tab="reinstall" />
-      {server && supported === false && <p className="notice" role="status">Reinstall is not available for this server yet.</p>}
+      {server && supported === false && <p className="notice" role="status">Reinstall needs the panel agent. Start this server and wait until it shows as connected, then reload this page.</p>}
       <div className="cols">
         <div className="main-col">
           <section className="card pad-lg" aria-labelledby="os-h">
@@ -58,11 +74,15 @@ export function Reinstall({ serverId }: { serverId: string }) {
             <div className="os-grid" role="radiogroup" aria-labelledby="os-h">
               {systems.map((o) => (
                 <button key={o.image} role="radio" aria-checked={sel === o.image} className={`os ${sel === o.image ? 'sel' : ''}`} onClick={() => setSel(o.image)} disabled={inProgress || supported === false}>
-                  <img className="os-logo" src={o.logo} alt="" aria-hidden="true" loading="lazy" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                  <span><span style={{ display: 'block', fontWeight: 600 }}>{o.name}</span><span className="muted" style={{ fontSize: 12 }}>{o.ver}</span></span>
+                  <img className="os-logo" src={o.logo} alt="" aria-hidden="true" loading="lazy" referrerPolicy="no-referrer" onError={(e) => logoFallback(e, o)} />
+                  <span>
+                    <span style={{ display: 'block', fontWeight: 600 }}>{o.name}</span>
+                    <span className="muted" style={{ display: 'block', fontSize: 12 }}>{o.ver} · {o.brand}</span>
+                  </span>
                 </button>
               ))}
             </div>
+            {chosen?.note && <p className="muted" style={{ marginTop: 12, fontSize: 13 }}>{chosen.note}</p>}
           </section>
 
           <section className="card pad-lg" aria-labelledby="acc-h">
@@ -90,7 +110,7 @@ export function Reinstall({ serverId }: { serverId: string }) {
             <h2 id="sum-h" className="card-title">Summary</h2>
             <div className="kv"><span className="muted">Server</span><span>{server?.name ?? '…'}</span></div>
             <div className="kv"><span className="muted">New system</span><b>{chosen ? `${chosen.name} ${chosen.ver}` : '—'}</b></div>
-            <div className="kv"><span className="muted">Takes about</span><span>3 minutes</span></div>
+            <div className="kv"><span className="muted">Takes about</span><span>5–10 minutes</span></div>
             <div className="warnbox">All files and apps on this server will be erased. The panel agent is reinstalled automatically.</div>
 
             {inProgress ? (

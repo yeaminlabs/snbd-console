@@ -69,7 +69,7 @@ export async function registerHardening(app: FastifyInstance) {
     if (isProd) reply.header('strict-transport-security', 'max-age=31536000');
     const type = String(reply.getHeader('content-type') ?? '');
     if (type.startsWith('text/html')) {
-      reply.header('content-security-policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+      reply.header('content-security-policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' ws: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
     }
     return payload;
   });

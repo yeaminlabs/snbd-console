@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { startAgentReinstall } from './agentReinstall.js';
+import { RpcError } from './agentRpc.js';
 import { buildUserData } from './cloudinit.js';
 import { audit, pool, randomToken, sha256 } from './db.js';
 import { OS_CATALOG, findOs } from './os.js';
@@ -67,7 +69,11 @@ export function registerManage(app: FastifyInstance) {
     const server = await ownedServer(client, req.params.id);
     if (!server) return reply.code(404).send({ error: 'Not found' });
     const adapter = getAdapter(server.provider);
-    if (!adapter.capabilities.rebuild) return reply.code(501).send({ error: 'Reinstall is not available for this server' });
+    const canRebuild = adapter.capabilities.rebuild;
+    const canAgent = agents.has(server.id);
+    if (!canRebuild && !canAgent) {
+      return reply.code(501).send({ error: 'Reinstall needs the panel agent: start this server and wait for it to connect, then try again' });
+    }
 
     // one reinstall at a time; the lock also stops a double click from wiping a half-installed disk
     const lock = await pool.query(
@@ -85,12 +91,19 @@ export function registerManage(app: FastifyInstance) {
 
     let rootPassword: string | undefined;
     try {
-      ({ rootPassword } = await adapter.rebuild(server, { image: body.data.os, userData: buildUserData(panelUrl, token) }));
+      if (canRebuild) {
+        ({ rootPassword } = await adapter.rebuild(server, { image: body.data.os, userData: buildUserData(panelUrl, token) }));
+      } else {
+        // no provider rebuild: drive bin456789/reinstall through the agent, which re-enrolls itself
+        const os = findOs(body.data.os)!;
+        rootPassword = await startAgentReinstall(server.id, os.reinstallArgs, `${panelUrl}/enroll/${token}`);
+      }
     } catch (err) {
-      req.log.error(err, 'rebuild failed');
+      req.log.error(err, 'reinstall failed');
       await pool.query('delete from enroll_tokens where server_id = $1 and used_at is null', [server.id]);
       await pool.query('update servers set reinstall_started_at = null where id = $1', [server.id]);
       await audit(client.id, server.id, 'reinstall.failed', { os: body.data.os });
+      if (err instanceof RpcError) return reply.code(err.status >= 500 ? 502 : err.status).send({ error: err.message });
       const f = providerFailure(err);
       return reply.code(f.status).send({ error: f.error });
     }
