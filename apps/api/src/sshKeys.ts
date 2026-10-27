@@ -88,7 +88,7 @@ export function registerSshKeys(app: FastifyInstance) {
     const client = await clientFromRequest(req);
     if (!client) return reply.code(401).send({ error: 'Not signed in' });
     const keys = (await pool.query(
-      `select k.id, k.name, k.key_type, k.public_key, k.fingerprint, k.private_generated as "privateGenerated", k.created_at as "createdAt",
+      `select k.id, k.name, k.key_type as "keyType", k.public_key as "publicKey", k.fingerprint, k.private_generated as "privateGenerated", k.created_at as "createdAt",
               coalesce((select json_agg(json_build_object('id', s.id, 'name', s.name) order by s.name)
                  from ssh_key_servers ks join servers s on s.id = ks.server_id
                  where ks.key_id = k.id), '[]') as servers

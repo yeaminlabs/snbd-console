@@ -205,9 +205,9 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
   return (
     <Modal titleId="ck-h" title="Add an SSH key" onClose={onClose}>
       <form onSubmit={submit}>
-        <div className="view-toggle" role="tablist" style={{ marginTop: 12 }}>
-          <button type="button" className={`icon-btn ${mode === 'generate' ? 'on' : ''}`} onClick={() => setMode('generate')}>Generate</button>
-          <button type="button" className={`icon-btn ${mode === 'import' ? 'on' : ''}`} onClick={() => setMode('import')}>Import</button>
+        <div className="seg" role="tablist" style={{ marginTop: 12 }}>
+          <button type="button" className={`btn ${mode === 'generate' ? 'on' : ''}`} onClick={() => setMode('generate')}>Generate</button>
+          <button type="button" className={`btn ${mode === 'import' ? 'on' : ''}`} onClick={() => setMode('import')}>Import</button>
         </div>
         <div className="field" style={{ marginTop: 16 }}>
           <label htmlFor="key-name">Name</label>

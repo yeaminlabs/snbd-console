@@ -85,7 +85,7 @@ export function Activity() {
             {items?.map((a) => (
               <div className="ar" key={a.id}>
                 <span className="muted" title={new Date(a.at).toLocaleString()}>{new Date(a.at).toLocaleString([], { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
-                <a href={`#/servers/${a.serverId}`} style={{ color: 'var(--ink)', fontWeight: 500, textDecoration: 'none' }}>{a.server}</a>
+                {a.serverId ? <a href={`#/servers/${a.serverId}`} style={{ color: 'var(--ink)', fontWeight: 500, textDecoration: 'none' }}>{a.server}</a> : <span style={{ color: 'var(--ink)', fontWeight: 500 }}>{a.server}</span>}
                 <span style={{ wordBreak: 'break-word' }}>{(label[a.action] ?? (() => a.action))(a.meta ?? {})}</span>
                 <span className="muted">{a.via ? `Agent: ${a.via}` : a.system ? 'System' : 'You'}</span>
               </div>

@@ -243,6 +243,11 @@ textarea.input { height: auto; padding: 10px 12px; }
 .drop-overlay { position: absolute; inset: 0; background: rgba(213,12,45,.08); backdrop-filter: blur(2px); display: flex; align-items: center; justify-content: center; z-index: 5; border-radius: var(--radius); }
 .drop-overlay-inner { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--red-dark); font-weight: 600; }
 .drop-overlay-inner span { font-weight: 400; font-size: 12px; color: var(--muted); }
+/* segmented control (Generate / Import pickers) */
+.seg { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card); }
+.seg .btn { height: 32px; padding: 0 14px; border: 0; font-size: 13px; color: var(--muted); background: none; }
+.seg .btn.on { background: var(--red-tint); color: var(--red-dark); }
+
 /* loading spinner */
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--red); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
