@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { HetznerAdapter } from './hetzner.js';
+import { ProxmoxAdapter } from './proxmox.js';
 
 export interface Plan { vcpu?: number; ramGb?: number; diskGb?: number; name?: string; serverType?: string }
 
@@ -70,6 +71,15 @@ function pick(provider: string): ProviderAdapter {
       throw new ProviderError('HETZNER_API_TOKEN is not set on the panel', 'not_configured');
     }
     console.warn('[provider:hetzner] HETZNER_API_TOKEN not set; using the stub');
+  }
+  if (provider === 'bdix') {
+    if (process.env.PROXMOX_URL && process.env.PROXMOX_TOKEN_ID && process.env.PROXMOX_TOKEN_SECRET) {
+      return new ProxmoxAdapter();
+    }
+    if (process.env.NODE_ENV === 'production') {
+      throw new ProviderError('PROXMOX_URL/PROXMOX_TOKEN_ID/PROXMOX_TOKEN_SECRET are not set on the panel', 'not_configured');
+    }
+    console.warn('[provider:bdix] Proxmox env vars not set; using the stub');
   }
   return bdix;
 }
