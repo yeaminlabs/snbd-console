@@ -112,6 +112,22 @@ Admins get **Log in to SNBD Panel as this client** on the service page (`LoginLi
 | Open panel | `sso` | `sso` | 60-second single-use login URL |
 | Reset password | `resetpassword` | `resetpassword` | new password, all panel sessions revoked |
 | Test Connection | `TestConnection` | `ping` | verifies reachability + signature |
+| Admin "Attach existing VPS" field | `AdminServicesTabFieldsSave` | `attach` | links a BDIX service to a VM someone already created by hand on Proxmox |
+
+## Attaching an existing BDIX VPS
+
+For a BDIX service whose VM was created manually on Proxmox before it existed in the panel (not a
+normal order — a one-time migration). On the service's admin page:
+
+1. Set **Dedicated IP** to the VM's real routed IP.
+2. Under Module Information, enter the **Proxmox VMID** and Save.
+
+The panel looks the VMID up on Proxmox itself — a fake or wrong VMID fails loudly rather than
+creating a phantom server — pulls its real specs, links it to this service and client, and tries
+to install the monitoring agent automatically over Proxmox's guest-agent channel. If that channel
+isn't reachable (the agent isn't running inside that particular VM), the save message gives you a
+one-line command to run on the VM by hand instead. Once linked, the field is replaced with a live
+status line; re-attaching to a different VMID needs the existing link cleared in the panel first.
 
 ## Troubleshooting
 

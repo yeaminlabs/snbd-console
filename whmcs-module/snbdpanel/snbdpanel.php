@@ -408,6 +408,74 @@ function snbdpanel_LoginLink(array $params)
         . '</span>';
 }
 
+/**
+ * Admin-only "Attach an existing VPS" field, for BDIX customers whose VM was created by hand on
+ * Proxmox before this service existed in the panel (a migration tool, not part of normal
+ * ordering). Shown on the service's admin page under Module Information.
+ *
+ * Fill in the Dedicated IP field above first, type the Proxmox VMID here, and Save: the panel
+ * looks the VMID up on Proxmox itself (refusing a fake one), links this service to it, and tries
+ * to install the monitoring agent automatically. A server already linked shows its live status
+ * instead of the input, so this is safe to leave visible — re-saving the same VMID just confirms
+ * the link rather than creating a duplicate.
+ */
+function snbdpanel_AdminServicesTabFields(array $params)
+{
+    if (strtolower(trim((string) ($params['configoption1'] ?? ''))) !== 'bdix') {
+        return [];
+    }
+    $snapshot = snbdpanel_snapshot($params, 5);
+    if ($snapshot['ok']) {
+        $server = $snapshot['data']['server'] ?? [];
+        $status = (string) ($server['status'] ?? '?');
+        $online = !empty($server['agentConnected']) ? 'agent connected' : 'agent not yet connected';
+        return [
+            'Panel link' => '<span class="text-success">Linked</span> — status: '
+                . htmlspecialchars($status, ENT_QUOTES, 'UTF-8') . ', ' . $online
+                . '. To re-link to a different VMID, clear this service\'s link in the panel database first.',
+        ];
+    }
+    return [
+        'Proxmox VMID (attach existing VPS)' => [
+            'Type' => 'text',
+            'Size' => '10',
+            'Description' => 'Only for a VM someone already created by hand on Proxmox. Set the Dedicated IP '
+                . 'field above first, then enter the VMID here and Save. Leave blank to do nothing.',
+        ],
+    ];
+}
+
+function snbdpanel_AdminServicesTabFieldsSave(array $params)
+{
+    $vmid = trim((string) ($params['Proxmox VMID (attach existing VPS)'] ?? ''));
+    if ($vmid === '') {
+        return '';
+    }
+    $ip = trim((string) ($params['dedicatedip'] ?? ''));
+    if ($ip === '') {
+        return 'Set the Dedicated IP field first, then save again.';
+    }
+    $plan = snbdpanel_plan($params);
+    $plan['provider'] = 'bdix';
+
+    list($status, $data, $err) = snbdpanel_call($params, 'attach', ['vmid' => $vmid, 'ip' => $ip, 'plan' => $plan], 'vmid-' . $vmid, 30);
+    $result = snbdpanel_result([$status, $data, $err]);
+    if ($result !== 'success') {
+        return $result;
+    }
+
+    if (!empty($data['client'])) {
+        snbdpanel_store_credentials($params, ['email' => $data['client']['email'] ?? '']);
+    }
+    if (empty($data['agentPushStarted']) && !empty($data['manualCommand'])) {
+        return 'Linked to VMID ' . htmlspecialchars($vmid, ENT_QUOTES, 'UTF-8') . ', but the panel could not '
+            . 'reach this VM\'s guest agent to install itself. Run this once on the VM: '
+            . htmlspecialchars($data['manualCommand'], ENT_QUOTES, 'UTF-8');
+    }
+    return 'Linked to VMID ' . htmlspecialchars($vmid, ENT_QUOTES, 'UTF-8') . '. Installing the panel agent now — '
+        . 'refresh this page in a minute to see it connect.';
+}
+
 /* ------------------------------------------------------------------ client area */
 
 function snbdpanel_ClientArea(array $params)

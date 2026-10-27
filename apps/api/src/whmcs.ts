@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { buildUserData } from './cloudinit.js';
 import { audit, hashPassword, pool, randomToken, sha256 } from './db.js';
 import { getAdapter, type ProviderServer } from './providers/index.js';
+import { getVmInfo, pushEnrollScript } from './providers/proxmoxClient.js';
 import { agents } from './registry.js';
 import { ipLimit } from './hardening.js';
 import { startSession } from './session.js';
@@ -29,7 +30,7 @@ const Plan = z.object({
   serverType: z.string().max(40).optional(),
 });
 
-const Action = z.enum(['ping', 'create', 'suspend', 'unsuspend', 'terminate', 'changepackage', 'sso', 'info', 'resetpassword']);
+const Action = z.enum(['ping', 'create', 'attach', 'suspend', 'unsuspend', 'terminate', 'changepackage', 'sso', 'info', 'resetpassword']);
 
 const Body = z.object({
   action: Action,
@@ -39,6 +40,10 @@ const Body = z.object({
     .optional(),
   hostname: z.string().max(60).optional(),
   plan: Plan.optional(),
+  // attach only: the already-running VM to link, and the IP WHMCS has on file for it (Proxmox
+  // itself has no notion of which IP belongs to which VM, so this must come from the order)
+  vmid: z.string().max(20).optional(),
+  ip: z.string().max(45).optional(),
 });
 type Body = z.infer<typeof Body>;
 
@@ -169,6 +174,64 @@ async function handle(body: Body, panelUrl: string, webUrl: string): Promise<obj
     return serviceView((await findServer(body.serviceId!)) ?? server, webUrl, {
       existing: false,
       client: { email: account.email, password: account.password },
+    });
+  }
+
+  if (body.action === 'attach') {
+    if (!body.plan || body.plan.provider !== 'bdix') throw new HttpError(400, 'attach is only for bdix servers');
+    if (!body.client) throw new HttpError(400, 'client is required');
+    if (!body.serviceId) throw new HttpError(400, 'serviceId is required');
+    if (!body.vmid) throw new HttpError(400, 'vmid is required — the Proxmox VMID of the already-running VPS');
+    if (!body.ip) throw new HttpError(400, "ip is required — set the service's Dedicated IP in WHMCS first");
+
+    let server = await findServer(body.serviceId);
+    if (server?.terminated_at) throw new HttpError(409, 'service was terminated');
+
+    // ground truth comes from Proxmox, never from the form: a VMID that does not exist must fail loudly
+    let vm;
+    try {
+      vm = await getVmInfo(body.vmid);
+    } catch (err) {
+      throw new HttpError(502, `could not find VMID ${body.vmid} on Proxmox: ${(err as Error).message}`);
+    }
+    const specs = { vcpu: vm.cores, ramGb: vm.ramGb, ...(vm.diskGb ? { diskGb: vm.diskGb } : {}) };
+
+    const account = await upsertClient(body.client);
+    if (!server) {
+      await pool.query(
+        `insert into servers (client_id, name, provider, status, os, plan, whmcs_service_id)
+         values ($1, $2, 'bdix', 'agent_offline', $3, $4, $5)
+         on conflict (whmcs_service_id) do nothing`,
+        [account.id, body.hostname || vm.name, body.plan.os ?? null, specs, body.serviceId],
+      );
+      server = await findServer(body.serviceId);
+    }
+    if (!server) throw new HttpError(500, 'could not create server record');
+
+    await pool.query(
+      `update servers set provider_ref = $2, ip = $3::inet, plan = $4,
+         status = case when status in ('running', 'provisioning') then status else 'agent_offline' end
+       where id = $1`,
+      [server.id, body.vmid, body.ip, specs],
+    );
+    await audit(account.id, server.id, 'server.attached', { source: 'whmcs', vmid: body.vmid, serviceId: body.serviceId });
+
+    // fresh enroll token; a previous unused one from an earlier attempt must not linger
+    await pool.query('delete from enroll_tokens where server_id = $1 and used_at is null', [server.id]);
+    const token = randomToken(24);
+    await pool.query(`insert into enroll_tokens (server_id, token_hash, expires_at) values ($1, $2, now() + make_interval(hours => $3))`, [server.id, sha256(token), PROVISION_TOKEN_HOURS]);
+    const enrollUrl = `${panelUrl}/enroll/${token}`;
+
+    // best-effort: push the install over the guest-agent channel, but never make the webhook wait
+    // the 1-3 minutes it takes to finish — the server flips to "running" on its own once connected
+    const agentPushStarted = await pushEnrollScript(body.vmid, enrollUrl).catch(() => false);
+
+    server = (await findServer(body.serviceId)) ?? server;
+    return serviceView(server, webUrl, {
+      existing: !!server,
+      client: { email: account.email },
+      agentPushStarted,
+      manualCommand: agentPushStarted ? undefined : `curl -fsSL ${enrollUrl} | sh`,
     });
   }
 
