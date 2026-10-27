@@ -90,27 +90,47 @@ export async function getVmStatus(vmid: string): Promise<string> {
   return s.status;
 }
 
-async function vmAction(vmid: string, action: 'start' | 'shutdown' | 'stop' | 'reboot'): Promise<void> {
+async function vmAction(vmid: string, action: 'start' | 'shutdown' | 'stop' | 'reboot', timeoutMs = 60_000): Promise<void> {
   assertVmid(vmid);
   const upid = (await pve<string>('POST', `/nodes/${pveNode()}/qemu/${vmid}/status/${action}`))!;
-  await waitTask(upid, action === 'shutdown' ? 35_000 : 60_000);
+  await waitTask(upid, timeoutMs);
 }
 
 export async function startVm(vmid: string): Promise<void> {
   await vmAction(vmid, 'start');
 }
 
-/** Graceful ACPI shutdown; falls back to a hard stop if the guest does not respond in time. */
+/**
+ * Graceful ACPI shutdown; falls back to a hard stop if the guest does not respond in time.
+ *
+ * The wait here must outlast Proxmox's own ACPI shutdown timeout (commonly up to ~60s): if our
+ * side gives up first and fires a hard stop while the original shutdown task is still holding the
+ * VM's config lock, that second call collides with the first and fails with a lock error — which
+ * then cascades, since every later action on the VM hits the same stuck lock. Waiting it out, then
+ * checking real status before ever issuing a competing action, avoids that race entirely.
+ */
 export async function stopVmGracefully(vmid: string): Promise<void> {
   try {
-    await vmAction(vmid, 'shutdown');
+    await vmAction(vmid, 'shutdown', 90_000);
+    return;
   } catch {
+    /* fall through: shutdown genuinely failed or outlasted even our generous wait */
+  }
+  const status = await getVmStatus(vmid).catch(() => 'running');
+  if (status === 'stopped') return;
+  // the graceful path is confirmed over (success or failure already resolved above), so a hard
+  // stop now cannot collide with it; one short retry absorbs any trailing lock-release delay
+  try {
+    await vmAction(vmid, 'stop');
+  } catch (err) {
+    if (!/got timeout/i.test((err as Error).message)) throw err;
+    await new Promise((r) => setTimeout(r, 5000));
     await vmAction(vmid, 'stop');
   }
 }
 
 export async function rebootVm(vmid: string): Promise<void> {
-  await vmAction(vmid, 'reboot');
+  await vmAction(vmid, 'reboot', 90_000);
 }
 
 /** Deletes the VM and its disks. A VMID that is already gone is treated as success (idempotent). */

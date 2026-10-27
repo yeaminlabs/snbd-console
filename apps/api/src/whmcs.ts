@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { buildUserData } from './cloudinit.js';
 import { audit, hashPassword, pool, randomToken, sha256 } from './db.js';
-import { getAdapter, type ProviderServer } from './providers/index.js';
+import { getAdapter, ProviderError, type ProviderServer } from './providers/index.js';
 import { getVmInfo, pushEnrollScript } from './providers/proxmoxClient.js';
 import { agents } from './registry.js';
 import { ipLimit } from './hardening.js';
@@ -116,6 +116,18 @@ async function provision(server: ServerRow, panelUrl: string) {
     await audit(server.client_id, server.id, 'provision.failed', { error: detail });
     // surface the provider's own words: "serverType required", "token not set", quota, etc.
     throw new HttpError(502, `provider failed to create the server: ${detail}`);
+  }
+}
+
+// A suspend/unsuspend/resize/terminate that fails against the real hosting backend must surface
+// the actual reason (quota, lock, unreachable...) to WHMCS, not a bare "internal error" — that's
+// the only thing standing between an admin and a support ticket they can't do anything with.
+async function providerCall<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof ProviderError) throw new HttpError(err.code === 'unsupported' ? 501 : 502, err.message);
+    throw err;
   }
 }
 
@@ -242,26 +254,26 @@ async function handle(body: Body, panelUrl: string, webUrl: string): Promise<obj
 
   switch (body.action) {
     case 'suspend':
-      await getAdapter(server.provider).suspend(server);
+      await providerCall(() => getAdapter(server.provider).suspend(server));
       await pool.query('update servers set suspended_at = coalesce(suspended_at, now()) where id = $1', [server.id]);
       closeTerminals(server.id);
       await audit(server.client_id, server.id, 'server.suspended');
       return { ok: true };
     case 'unsuspend':
-      await getAdapter(server.provider).unsuspend(server);
+      await providerCall(() => getAdapter(server.provider).unsuspend(server));
       await pool.query('update servers set suspended_at = null where id = $1', [server.id]);
       await audit(server.client_id, server.id, 'server.unsuspended');
       return { ok: true };
     case 'changepackage': {
       if (!body.plan) throw new HttpError(400, 'plan is required for changepackage');
       const { provider: _p, region: _r, os: _o, ...specs } = body.plan;
-      await getAdapter(server.provider).resize(server, specs);
+      await providerCall(() => getAdapter(server.provider).resize(server, specs));
       await pool.query('update servers set plan = $2 where id = $1', [server.id, specs]);
       await audit(server.client_id, server.id, 'server.resized', specs);
       return { ok: true };
     }
     case 'terminate':
-      await getAdapter(server.provider).destroy(server);
+      await providerCall(() => getAdapter(server.provider).destroy(server));
       await pool.query('update servers set terminated_at = now(), status = $2 where id = $1', [server.id, 'stopped']);
       // cut the live connection and make sure no key or token can bring the agent back
       agents.get(server.id)?.socket.close(4005, 'server terminated');
