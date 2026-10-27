@@ -1,6 +1,6 @@
 // MCP + API token checks. Needs the API on :3101, the demo login (DEMO_PASSWORD) and AGENT_BIN (an agent binary for this machine).
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -52,6 +52,15 @@ check('initialize: server info + instructions', c1.getServerVersion()?.name === 
 const tools = (await c1.listTools()).tools;
 check('nine tools: six read and three write', tools.map((t) => t.name).sort().join() === 'get_public_ip,list_files,list_servers,read_file,restart_service,run_command,server_status,view_logs,write_file');
 check('read tools are marked read-only', tools.filter((t) => t.annotations?.readOnlyHint !== true).map((t) => t.name).sort().join() === 'restart_service,run_command,write_file');
+
+// ---- file tools must move bytes, not base64 strings
+const testFile = join(tmpdir(), `snbd-mcp-write-${process.pid}.txt`);
+const sample = 'hello from MCP\nsecond line — ünïcode\n';
+const wf = await call(c1, 'write_file', { server: 'mcp-alpha', path: testFile, content: sample });
+check('write_file decodes the agent response and writes UTF-8', wf.isError !== true && readFileSync(testFile, 'utf8') === sample, text(wf));
+const rf = await call(c1, 'read_file', { server: 'mcp-alpha', path: testFile });
+check('read_file returns decoded text', rf.isError !== true && text(rf).includes(sample.trim()), text(rf));
+unlinkSync(testFile);
 
 const ls = JSON.parse(text(await call(c1, 'list_servers', {})));
 const alpha = ls.servers.find((s: any) => s.name === 'mcp-alpha'), beta = ls.servers.find((s: any) => s.name === 'mcp-beta');

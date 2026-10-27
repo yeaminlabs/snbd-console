@@ -250,10 +250,11 @@ const TOOLS: ToolDef[] = [
       const MAX_READ = 128 * 1024;
       const result = await fsRpc<{ data: string; eof: boolean }>(s.id, 'fs.read', { path: a.path, offset: a.offset, length: MAX_READ });
       const truncated = !result.eof;
+      const body = Buffer.from(result.data, 'base64').toString('utf8');
       return {
         serverId: s.id,
         audit: { path: a.path },
-        text: `Contents of "${a.path}" on "${s.name}"${a.offset > 0 ? ` (offset ${a.offset})` : ''}${truncated ? ' [truncated at 128 KB]' : ''}:\n\n${result.data}`,
+        text: `Contents of "${a.path}" on "${s.name}"${a.offset > 0 ? ` (offset ${a.offset})` : ''}${truncated ? ' [truncated at 128 KB]' : ''}:\n\n${body}`,
       };
     },
   },
@@ -311,7 +312,8 @@ const TOOLS: ToolDef[] = [
     async run(auth, a) {
       const s = await resolveServer(auth, a.server);
       requireOnline(s);
-      await fsRpc(s.id, 'fs.writefile', { path: a.path, data: a.content });
+      // the agent takes bytes base64-encoded; content arrives as UTF-8 text from the MCP client
+      await fsRpc(s.id, 'fs.writefile', { path: a.path, data: Buffer.from(a.content, 'utf8').toString('base64') });
       return {
         serverId: s.id,
         audit: { path: a.path, bytes: Buffer.byteLength(a.content) },
