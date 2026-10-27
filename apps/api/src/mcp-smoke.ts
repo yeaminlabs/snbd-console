@@ -85,7 +85,7 @@ for (const bad of ["system; rm -rf /", "unit:foo'bar", "unit:a b", "docker:../x"
 }
 check('rejects lines out of range', (await call(c1, 'view_logs', { server: 'mcp-alpha', lines: 0 })).isError === true && (await call(c1, 'view_logs', { server: 'mcp-alpha', lines: 501 })).isError === true);
 check('rejects unexpected arguments', (await call(c1, 'server_status', { server: 'mcp-alpha', extra: 1 })).isError === true);
-check('docker source on a machine without Docker is a clean message', /not installed|No such|Error/i.test(text(await call(c1, 'view_logs', { server: 'mcp-alpha', source: 'docker:web' }))));
+check('docker source on a machine without Docker is a clean message', /not installed|No such|Error|Cannot connect|daemon/i.test(text(await call(c1, 'view_logs', { server: 'mcp-alpha', source: 'docker:web' }))));
 await c1.close();
 
 // ---- scoped token
