@@ -12,11 +12,11 @@ The project contains a React frontend, a TypeScript API backed by PostgreSQL, an
 - **Application installer:** recipes for Claude Code, Hermes Agent, OpenClaw, Docker, Node.js 22, n8n, and Ollama, with progress, logs, and cancellation.
 - **Server management:** connect an existing VPS, reset its root password, and use provider-supported power and OS reinstall controls.
 - **Hetzner Cloud:** provision, suspend/unsuspend, resize, rebuild, and delete servers through the provider adapter.
-- **WHMCS integration:** signed, idempotent lifecycle webhooks and single-use customer SSO links.
+- **WHMCS integration:** signed, idempotent lifecycle webhooks that provision the VPS and create a panel login, plus one-click SSO and password reset.
 - **AI connectors:** scoped personal API tokens and OAuth authorization for read-only MCP tools.
 - **Operations:** signed agent releases, agent key rotation, offline/recovery alerts, audit logs, retention cleanup, and database backup/restore scripts.
 
-**Current limits:** BDIX is a placeholder adapter and does not provision VMs. Hetzner also falls back to that stub when no API token is configured. MCP currently exposes read-only tools; deployment and other write tools are not implemented. CloudPanel is a deployment option for the panel, not an included application recipe. Use the [staging checklist](docs/STAGING.md) to validate real provider operations and app installations before serving customers.
+**Current limits:** BDIX is a placeholder adapter and does not provision VMs. Hetzner refuses to provision in production when `HETZNER_API_TOKEN` is missing (development still falls back to the stub). MCP currently exposes read-only tools; deployment and other write tools are not implemented. CloudPanel is a deployment option for the panel, not an included application recipe. Use the [staging checklist](docs/STAGING.md) to validate real provider operations and app installations before serving customers.
 
 ## Architecture
 

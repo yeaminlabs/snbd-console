@@ -8,6 +8,16 @@ export async function runMaintenance(): Promise<Record<string, number>> {
     enrollTokens: ["delete from enroll_tokens where expires_at < now() - interval '1 day' or used_at < now() - interval '7 days'", []],
     ssoTokens: ["delete from sso_tokens where expires_at < now() - interval '1 hour'", []],
     sessions: ['delete from sessions where expires_at < now()', []],
+    // a create response holds the generated panel password so a timed-out WHMCS call can retry;
+    // keep it only long enough for that retry, then drop it from the replay cache
+    webhookPasswords: [
+      `update webhook_events
+          set response = jsonb_set(response, '{client}', (response->'client') - 'password')
+        where created_at < now() - interval '1 hour'
+          and jsonb_typeof(response->'client') = 'object'
+          and (response->'client') ? 'password'`,
+      [],
+    ],
     webhookEvents: ["delete from webhook_events where created_at < now() - make_interval(days => $1)", [days('WEBHOOK_EVENT_RETENTION_DAYS', 30)]],
     heartbeats: ['delete from heartbeats where at < now() - make_interval(days => $1)', [days('HEARTBEAT_RETENTION_DAYS', 30)]],
     jobs: ["delete from jobs where status in ('done', 'failed') and created_at < now() - make_interval(days => $1)", [days('JOB_RETENTION_DAYS', 90)]],

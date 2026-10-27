@@ -29,10 +29,14 @@ const Plan = z.object({
   serverType: z.string().max(40).optional(),
 });
 
+const Action = z.enum(['ping', 'create', 'suspend', 'unsuspend', 'terminate', 'changepackage', 'sso', 'info', 'resetpassword']);
+
 const Body = z.object({
-  action: z.enum(['create', 'suspend', 'unsuspend', 'terminate', 'changepackage', 'sso']),
-  serviceId: z.number().int().positive(),
-  client: z.object({ id: z.number().int().positive(), email: z.string().email(), name: z.string().min(1).max(120) }),
+  action: Action,
+  serviceId: z.number().int().positive().optional(),
+  client: z
+    .object({ id: z.number().int().positive(), email: z.string().email(), name: z.string().min(1).max(120) })
+    .optional(),
   hostname: z.string().max(60).optional(),
   plan: Plan.optional(),
 });
@@ -53,27 +57,37 @@ interface ServerRow extends ProviderServer {
   plan: object;
   region: string | null;
   os: string | null;
+  ip: string | null;
+  suspended_at: string | null;
   terminated_at: string | null;
 }
 
 async function findServer(serviceId: number): Promise<ServerRow | null> {
   const { rows } = await pool.query(
-    `select id, client_id, name, provider, provider_ref as "providerRef", status, plan, region, os, terminated_at from servers where whmcs_service_id = $1`,
+    `select id, client_id, name, provider, provider_ref as "providerRef", status, plan, region, os, host(ip) as ip, suspended_at, terminated_at
+     from servers where whmcs_service_id = $1`,
     [serviceId],
   );
   return rows[0] ?? null;
 }
 
-async function upsertClient(c: Body['client']): Promise<string> {
+/** One panel login per WHMCS client: link by WHMCS id first, then by email. */
+async function upsertClient(c: NonNullable<Body['client']>): Promise<{ id: string; password?: string; email: string }> {
   const email = c.email.toLowerCase();
-  const found = await pool.query('select id from clients where whmcs_client_id = $1 or email = $2 order by (whmcs_client_id = $1) desc limit 1', [c.id, email]);
+  const found = await pool.query('select id, email from clients where whmcs_client_id = $1 or email = $2 order by (whmcs_client_id = $1) desc limit 1', [c.id, email]);
   if (found.rows[0]) {
     await pool.query('update clients set whmcs_client_id = $2, name = $3 where id = $1', [found.rows[0].id, c.id, c.name]);
-    return found.rows[0].id;
+    // keep the stored address: it is the login, and WHMCS may have changed its billing email since
+    return { id: found.rows[0].id, email: found.rows[0].email };
   }
-  // WHMCS clients sign in through SSO; the random password keeps password login closed until they set one
-  const { rows } = await pool.query('insert into clients (email, name, password_hash, whmcs_client_id) values ($1, $2, $3, $4) returning id', [email, c.name, await hashPassword(randomToken()), c.id]);
-  return rows[0].id;
+  // a real password is generated so the client can also sign in directly, not only through SSO;
+  // WHMCS stores it with the service and shows it in the client area
+  const password = randomToken(12);
+  const { rows } = await pool.query(
+    'insert into clients (email, name, password_hash, whmcs_client_id) values ($1, $2, $3, $4) returning id',
+    [email, c.name, await hashPassword(password), c.id],
+  );
+  return { id: rows[0].id, password, email };
 }
 
 async function provision(server: ServerRow, panelUrl: string) {
@@ -93,8 +107,10 @@ async function provision(server: ServerRow, panelUrl: string) {
     await pool.query('update servers set provider_ref = $2, ip = coalesce($3::inet, ip) where id = $1', [server.id, res.providerRef, res.ip ?? null]);
     await audit(server.client_id, server.id, 'server.provisioned');
   } catch (err) {
-    await audit(server.client_id, server.id, 'provision.failed', { error: String((err as Error).message).slice(0, 300) });
-    throw new HttpError(502, 'provider failed to create the server');
+    const detail = String((err as Error).message).slice(0, 200);
+    await audit(server.client_id, server.id, 'provision.failed', { error: detail });
+    // surface the provider's own words: "serverType required", "token not set", quota, etc.
+    throw new HttpError(502, `provider failed to create the server: ${detail}`);
   }
 }
 
@@ -102,33 +118,61 @@ function closeTerminals(serverId: string) {
   for (const t of agents.get(serverId)?.terminals.values() ?? []) t.close(4403, 'server suspended');
 }
 
+function serviceView(server: ServerRow, webUrl: string, extra: object = {}) {
+  return {
+    serverId: server.id,
+    server: {
+      name: server.name,
+      status: server.status,
+      ip: server.ip,
+      os: server.os,
+      region: server.region,
+      provider: server.provider,
+      suspended: !!server.suspended_at,
+      agentConnected: agents.has(server.id),
+    },
+    panelUrl: webUrl,
+    ...extra,
+  };
+}
+
 async function handle(body: Body, panelUrl: string, webUrl: string): Promise<object> {
+  if (body.action === 'ping') return { ok: true, panelUrl: webUrl };
+
   if (body.action === 'create') {
     if (!body.plan) throw new HttpError(400, 'plan is required for create');
-    let server = await findServer(body.serviceId);
+    if (!body.client) throw new HttpError(400, 'client is required for create');
+    let server = await findServer(body.serviceId!);
     if (server?.terminated_at) throw new HttpError(409, 'service was terminated');
     if (server) {
       // retry of a create whose provider call failed
       const failed = await pool.query(`select action from audit_log where server_id = $1 and action in ('provision.failed', 'server.provisioned') order by id desc limit 1`, [server.id]);
       if (failed.rows[0]?.action === 'provision.failed') await provision(server, panelUrl);
-      return { serverId: server.id, existing: true };
+      server = (await findServer(body.serviceId!)) ?? server;
+      const { rows } = await pool.query('select email from clients where id = $1', [server.client_id]);
+      return serviceView(server, webUrl, { existing: true, client: { email: rows[0]?.email } });
     }
-    const clientId = await upsertClient(body.client);
+    const account = await upsertClient(body.client);
     const { provider, region, os, ...specs } = body.plan;
     const inserted = await pool.query(
       `insert into servers (client_id, name, provider, status, region, os, plan, whmcs_service_id)
        values ($1, $2, $3, 'provisioning', $4, $5, $6, $7)
        on conflict (whmcs_service_id) do nothing returning id`,
-      [clientId, body.hostname || `vps-${body.serviceId}`, provider, region ?? null, os ?? null, specs, body.serviceId],
+      [account.id, body.hostname || `vps-${body.serviceId}`, provider, region ?? null, os ?? null, specs, body.serviceId],
     );
-    server = await findServer(body.serviceId);
+    server = await findServer(body.serviceId!);
     if (!server) throw new HttpError(500, 'could not create server');
-    if (inserted.rowCount === 0) return { serverId: server.id, existing: true };
-    await audit(clientId, server.id, 'server.created', { source: 'whmcs', serviceId: body.serviceId });
+    if (inserted.rowCount === 0) return serviceView(server, webUrl, { existing: true, client: { email: account.email } });
+    await audit(account.id, server.id, 'server.created', { source: 'whmcs', serviceId: body.serviceId });
     await provision(server, panelUrl);
-    return { serverId: server.id, existing: false };
+    // the password is only in this answer: the panel stores a hash, WHMCS keeps it with the service
+    return serviceView((await findServer(body.serviceId!)) ?? server, webUrl, {
+      existing: false,
+      client: { email: account.email, password: account.password },
+    });
   }
 
+  if (!body.serviceId) throw new HttpError(400, 'serviceId is required');
   const server = await findServer(body.serviceId);
   if (body.action === 'terminate' && (!server || server.terminated_at)) return { ok: true, note: 'already gone' };
   if (!server || server.terminated_at) throw new HttpError(404, 'unknown service');
@@ -167,6 +211,19 @@ async function handle(body: Body, panelUrl: string, webUrl: string): Promise<obj
       await pool.query(`insert into sso_tokens (token_hash, client_id, expires_at) values ($1, $2, now() + make_interval(secs => $3))`, [sha256(token), server.client_id, SSO_TTL_S]);
       return { url: `${webUrl}/sso/${token}`, expiresInSeconds: SSO_TTL_S };
     }
+    case 'info': {
+      const { rows } = await pool.query('select email from clients where id = $1', [server.client_id]);
+      return serviceView(server, webUrl, { client: { email: rows[0]?.email } });
+    }
+    case 'resetpassword': {
+      const { rows } = await pool.query('select email from clients where id = $1', [server.client_id]);
+      const password = randomToken(12);
+      await pool.query('update clients set password_hash = $2 where id = $1', [server.client_id, await hashPassword(password)]);
+      // a reset means the old password must stop working everywhere
+      await pool.query('delete from sessions where client_id = $1', [server.client_id]);
+      await audit(server.client_id, server.id, 'client.password_reset', { source: 'whmcs' });
+      return { email: rows[0]?.email, password };
+    }
     default:
       throw new HttpError(400, 'unsupported action');
   }
@@ -186,6 +243,20 @@ export function registerWhmcs(app: FastifyInstance) {
     const parsed = Body.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid body', detail: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) });
 
+    const panelUrl = (process.env.PUBLIC_PANEL_URL ?? `${req.protocol}://${req.headers.host}`).replace(/\/$/, '');
+    const webUrl = (process.env.WEB_URL ?? panelUrl).replace(/\/$/, '');
+
+    // reads are answered fresh and never cached: a status check must not replay a minute-old reply
+    if (parsed.data.action === 'info' || parsed.data.action === 'ping') {
+      try {
+        return await handle(parsed.data, panelUrl, webUrl);
+      } catch (err) {
+        if (err instanceof HttpError) return reply.code(err.status).send({ error: err.message });
+        req.log.error(err, 'whmcs webhook failed');
+        return reply.code(500).send({ error: 'internal error' });
+      }
+    }
+
     // claim the key; a repeat gets the stored answer, a concurrent duplicate gets 409
     const claim = await pool.query(`insert into webhook_events (key, state) values ($1, 'processing') on conflict do nothing returning key`, [key]);
     if (claim.rowCount === 0) {
@@ -194,8 +265,6 @@ export function registerWhmcs(app: FastifyInstance) {
       return reply.code(409).send({ error: 'request in progress' });
     }
 
-    const panelUrl = (process.env.PUBLIC_PANEL_URL ?? `${req.protocol}://${req.headers.host}`).replace(/\/$/, '');
-    const webUrl = (process.env.WEB_URL ?? panelUrl).replace(/\/$/, '');
     try {
       const result = await handle(parsed.data, panelUrl, webUrl);
       await pool.query(`update webhook_events set state = 'done', http_status = 200, response = $2 where key = $1`, [key, result]);

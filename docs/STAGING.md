@@ -87,20 +87,24 @@ Then install the heavier apps one at a time and note failures: **Docker**, **n8n
 
 ## 6. WHMCS: module and test product
 - [ ] Copy `whmcs-module/snbdpanel/` to `<whmcs>/modules/servers/snbdpanel/`.
-- [ ] Setup → Servers → Add: **Hostname** = the staging domain (no `https://`), tick **Secure**, **Access Hash** = the `WHMCS_WEBHOOK_SECRET` value. The server test button may not apply to this module; ignore it.
+- [ ] Setup → Servers → Add: **Hostname** = the staging domain (no `https://`), tick **Secure**, **Access Hash** = the `WHMCS_WEBHOOK_SECRET` value. Press **Test Connection**; it must report success.
 - [ ] Turn on **Utilities → Logs → Module Log** so every call to the panel is recorded.
 - [ ] Create a hidden product, module **SNBD Panel**, options: provider `hetzner`, vCPU/RAM/disk (informational), region `hel1` (or your choice), OS `ubuntu-24.04`, **Hetzner server type `cx22`**. Add an optional configurable option named `os`.
 - [ ] Create a test client and place an order for it; accept it (or use admin "Create" on the service).
 
 **Pass when (in order):**
 - [ ] WHMCS shows the service **Active** and the module log shows `create` with a 200.
+- [ ] The service has **Service Username** = the client's email and a generated **Service Password**, and the welcome email can include both.
 - [ ] The panel's Servers list shows the new server as *Provisioning* with an IP.
 - [ ] A VM exists in the Hetzner project with the label `snbd_server_id`.
 - [ ] Within ~2 minutes the server flips to **Running** with no manual step (this proves the cloud-init user-data works on a real Hetzner image).
 - [ ] Press the admin **Create** button on the service again: no second VM appears.
 
 ## 7. WHMCS lifecycle and the client login
+- [ ] The client area shows the panel **email and password**. Copy them, open the panel in a private window and sign in with them. **Pass:** you land as that client, seeing only their server.
+- [ ] Press **Reset panel password**. **Pass:** the old password stops working, all panel sessions are signed out, and the new password is shown and saved on the service.
 - [ ] In the client area of the test client, press **Open panel**. **Pass:** you land in the panel signed in as that client, seeing only their server. If the button is missing or errors, check `snbdpanel_ClientArea`, `snbdpanel_ClientAreaAllowedFunctions` and the template against your WHMCS version and fix the module.
+- [ ] In the WHMCS admin service page, follow **Log in to SNBD Panel as this client**. **Pass:** the same, without typing credentials.
 - [ ] The same link used twice fails (single use, 60 seconds).
 - [ ] Admin **Suspend**: Hetzner server powers off, the panel shows *Suspended*, terminals are refused. **Unsuspend**: it powers on and returns to Running.
 - [ ] Panel **Power → Reboot**, then **Shut down**, then **Start**: Hetzner reflects each; status settles to Running within about 10 seconds of the agent returning.
@@ -129,7 +133,7 @@ Go live for a small group only if all of these are true:
 - [ ] You know who gets the alerts and what they do when one arrives.
 
 ## Known gaps to decide on before opening to everyone
-- **No staff/admin screen and no way to create a client except WHMCS single sign-on or `pnpm seed`.** Support work (looking at a client's server, resetting access) is done by hand in the database or WHMCS today.
+- **No staff/admin screen.** Client logins are created by WHMCS orders (email + generated password, saved on the service); support work is still done in WHMCS or the database.
 - **Hetzner root password is discarded at creation.** A new server has no known password until the client uses **Reset password** in the panel (works once the agent is connected). Consider telling clients this in the welcome email.
 - **BDIX:** no hypervisor adapter; create/power/reinstall are stubs until you choose one (Proxmox is the likely path).
 - **CloudPanel and CyberPanel** one-click installs are not included.

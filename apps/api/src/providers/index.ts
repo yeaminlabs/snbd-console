@@ -64,6 +64,11 @@ function pick(provider: string): ProviderAdapter {
   if (provider === 'hetzner') {
     const token = process.env.HETZNER_API_TOKEN;
     if (token) return new HetznerAdapter(token, process.env.HETZNER_API_URL);
+    // A missing token must never turn an order into a pretend server in production: the client
+    // would be billed for a VM that does not exist. Fail the provision call instead.
+    if (process.env.NODE_ENV === 'production') {
+      throw new ProviderError('HETZNER_API_TOKEN is not set on the panel', 'not_configured');
+    }
     console.warn('[provider:hetzner] HETZNER_API_TOKEN not set; using the stub');
   }
   return bdix;
