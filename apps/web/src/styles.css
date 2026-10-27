@@ -166,6 +166,7 @@ a.srow:focus-visible { outline: 2px solid var(--red); outline-offset: -2px; }
 .os.sel { border-color: var(--red); box-shadow: inset 0 0 0 1px var(--red); }
 .os:disabled { opacity: .6; cursor: default; }
 .os:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+.os-logo { width: 36px; height: 36px; object-fit: contain; flex: 0 0 36px; border-radius: 6px; background: var(--bg); padding: 4px; }
 .dot { width: 36px; height: 36px; border-radius: 8px; background: var(--bg); display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--red); flex: 0 0 36px; }
 .warnbox { margin-top: 12px; padding: 12px; border-radius: 6px; background: var(--warn-bg); color: #78350f; font-size: 13px; }
 .check { display: flex; align-items: center; gap: 10px; margin-top: 16px; font-weight: 500; cursor: pointer; min-height: 44px; }

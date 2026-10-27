@@ -58,7 +58,7 @@ export function Reinstall({ serverId }: { serverId: string }) {
             <div className="os-grid" role="radiogroup" aria-labelledby="os-h">
               {systems.map((o) => (
                 <button key={o.image} role="radio" aria-checked={sel === o.image} className={`os ${sel === o.image ? 'sel' : ''}`} onClick={() => setSel(o.image)} disabled={inProgress || supported === false}>
-                  <span className="dot" aria-hidden="true">{o.name.charAt(0)}</span>
+                  <img className="os-logo" src={o.logo} alt="" aria-hidden="true" loading="lazy" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                   <span><span style={{ display: 'block', fontWeight: 600 }}>{o.name}</span><span className="muted" style={{ fontSize: 12 }}>{o.ver}</span></span>
                 </button>
               ))}

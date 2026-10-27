@@ -26,7 +26,7 @@ export interface Metrics {
   latest: { at: string; cpu: number; memUsed: number; memTotal: number; diskUsed: number; diskTotal: number; uptime: number } | null;
 }
 
-export interface OsImage { image: string; name: string; ver: string }
+export interface OsImage { image: string; name: string; ver: string; logo: string }
 export interface FileEntry { name: string; type: 'dir' | 'file' | 'other'; link?: boolean; size: number; mode: string; mtime: number }
 export interface AppInfo { id: string; name: string; tag: string; desc: string; installed: boolean | null }
 export interface JobState { status: 'queued' | 'running' | 'done' | 'failed'; app: string; offset: number; log: string; pct: number; step: string }
