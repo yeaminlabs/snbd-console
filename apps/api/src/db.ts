@@ -90,9 +90,9 @@ export async function verifyPassword(pw: string, stored: string): Promise<boolea
   return timingSafeEqual(actual, expected);
 }
 
-export async function audit(clientId: string | null, serverId: string | null, action: string, meta: object = {}, via: string | null = null, ctx: AuditContext = {}) {
+export async function audit(clientId: string | null, serverId: string | null, action: string, meta: object = {}, via: string | null = null, ctx: AuditContext = {}, sessionId: string | null = null) {
   await pool.query(
-    'insert into audit_log (client_id, server_id, action, meta, via, ip_address, user_agent, location) values ($1, $2, $3, $4, $5, $6, $7, $8)',
-    [clientId, serverId, action, meta, via, ctx.ip ?? null, ctx.userAgent ?? null, ctx.location ?? null],
+    'insert into audit_log (client_id, server_id, action, meta, via, ip_address, user_agent, location, session_id) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+    [clientId, serverId, action, meta, via, ctx.ip ?? null, ctx.userAgent ?? null, ctx.location ?? null, sessionId],
   );
 }

@@ -26,7 +26,7 @@ export async function runMaintenance(): Promise<Record<string, number>> {
     oauthTokens: ["delete from oauth_tokens where expires_at < now() - interval '1 day'", []],
     oauthGrants: ["delete from oauth_grants where (revoked_at is not null and revoked_at < now() - interval '30 days') or expires_at < now() - interval '30 days'", []],
     oauthClients: ["delete from oauth_clients c where c.created_at < now() - interval '2 days' and not exists (select 1 from oauth_grants g where g.oauth_client_id = c.client_id)", []],
-    auditLog: ['delete from audit_log where at < now() - make_interval(days => $1)', [days('AUDIT_RETENTION_DAYS', 365)]],
+    auditLog: ['delete from audit_log where at < now() - make_interval(days => $1)', [days('AUDIT_RETENTION_DAYS', 30)]],
   };
   const out: Record<string, number> = {};
   for (const [name, [sql, params]] of Object.entries(steps)) {

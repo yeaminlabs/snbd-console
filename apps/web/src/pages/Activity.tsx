@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api, type AuditItem, type Server } from '../api';
 import { actorLabel, actorType, ago, parseDevice } from '../format';
 
@@ -64,10 +64,33 @@ function ActorBadge({ type, via }: { type: ReturnType<typeof actorType>; via?: s
   );
 }
 
+/** One log line: the action text plus any command/error detail (no actor, time or server). */
+function LogLineBody({ a }: { a: AuditItem }) {
+  const what = (label[a.action] ?? (() => a.action))(a.meta ?? {});
+  return (
+    <>
+      <div className="act-what">{what}</div>
+      {a.action === 'mcp.run_command' && (a.meta?.command || a.meta?.error) && (
+        <div className="act-cmd-wrap">
+          {a.meta.command && <pre className="act-cmd mono">{String(a.meta.command)}</pre>}
+          <div className="act-chips">
+            {a.meta?.exitCode !== undefined && (
+              <span className={`act-exit ${a.meta.exitCode === 0 ? 'ok' : 'bad'}`}>exit {String(a.meta.exitCode)}</span>
+            )}
+            {a.meta?.error && <span className="act-exit bad">{String(a.meta.error)}</span>}
+          </div>
+        </div>
+      )}
+      {a.action !== 'mcp.run_command' && a.meta?.error && (
+        <div className="act-err">{String(a.meta.error)}</div>
+      )}
+    </>
+  );
+}
+
 function ActivityCard({ a }: { a: AuditItem }) {
   const type = actorType(a.action, a.system);
   const device = parseDevice(a.user_agent);
-  const what = (label[a.action] ?? (() => a.action))(a.meta ?? {});
   const when = new Date(a.at);
   return (
     <div className="act-card">
@@ -76,24 +99,10 @@ function ActivityCard({ a }: { a: AuditItem }) {
         <span className="muted" title={when.toLocaleString()}>{ago(a.at)}</span>
       </div>
       <div className="act-card-body">
-        <div className="act-what">{what}</div>
+        <LogLineBody a={a} />
         <div className="act-server muted">
           {a.serverId ? <a href={`#/servers/${a.serverId}`}>{a.server}</a> : <span>{a.server}</span>}
         </div>
-        {a.action === 'mcp.run_command' && (a.meta?.command || a.meta?.error) && (
-          <div className="act-cmd-wrap">
-            {a.meta.command && <pre className="act-cmd mono">{String(a.meta.command)}</pre>}
-            <div className="act-chips">
-              {a.meta?.exitCode !== undefined && (
-                <span className={`act-exit ${a.meta.exitCode === 0 ? 'ok' : 'bad'}`}>exit {String(a.meta.exitCode)}</span>
-              )}
-              {a.meta?.error && <span className="act-exit bad">{String(a.meta.error)}</span>}
-            </div>
-          </div>
-        )}
-        {a.action !== 'mcp.run_command' && a.meta?.error && (
-          <div className="act-err">{String(a.meta.error)}</div>
-        )}
       </div>
       <div className="act-meta">
         {a.ip_address && (
@@ -114,6 +123,44 @@ function ActivityCard({ a }: { a: AuditItem }) {
   );
 }
 
+/** One agent session: every action that connection made, oldest first, one after another. */
+function SessionCard({ items, collapsed, onToggle }: { items: AuditItem[]; collapsed: boolean; onToggle: () => void }) {
+  const newest = items[0];
+  const oldest = items[items.length - 1];
+  const servers = [...new Set(items.filter((i) => i.serverId).map((i) => i.server))];
+  const when = new Date(newest.at);
+  return (
+    <div className="act-card act-session">
+      <div className="act-card-top">
+        <ActorBadge type="ai" via={newest.via} />
+        <span className="muted" title={when.toLocaleString()}>{ago(newest.at)}</span>
+      </div>
+      <div className="act-card-body">
+        <div className="act-what">Session · {items.length} {items.length === 1 ? 'action' : 'actions'}</div>
+        <div className="act-server muted">
+          {servers.length ? servers.join(', ') : newest.server}
+          {' · '}started {ago(oldest.at)}
+        </div>
+        {!collapsed && (
+          <ol className="act-session-log">
+            {[...items].reverse().map((a) => (
+              <li key={a.id} className="act-session-row">
+                <span className="muted act-session-time" title={new Date(a.at).toLocaleString()}>
+                  {new Date(a.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}><LogLineBody a={a} /></div>
+              </li>
+            ))}
+          </ol>
+        )}
+        <button className="link-btn" onClick={onToggle} style={{ marginTop: 8 }}>
+          {collapsed ? `Show ${items.length} ${items.length === 1 ? 'log' : 'logs'}` : 'Hide logs'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function Activity() {
   const [servers, setServers] = useState<Server[]>([]);
   const [server, setServer] = useState('');
@@ -121,10 +168,11 @@ export function Activity() {
   const [next, setNext] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   useEffect(() => { api.servers().then(setServers).catch(() => {}); }, []);
   useEffect(() => {
-    setItems(null); setNext(null); setError('');
+    setItems(null); setNext(null); setError(''); setCollapsed({});
     api.audit(server, null).then((r) => { setItems(r.items); setNext(r.next); }).catch((e) => setError(e.message));
   }, [server]);
 
@@ -132,6 +180,31 @@ export function Activity() {
     setBusy(true);
     try { const r = await api.audit(server, next); setItems((i) => [...(i ?? []), ...r.items]); setNext(r.next); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
+
+  // Agent actions that share a session id belong to one connection: show them
+  // as a single session card with its logs one after another (oldest first).
+  // Everything else stays a flat card.
+  const groups = useMemo(() => {
+    const bySession = new Map<string, AuditItem[]>();
+    for (const a of items ?? []) {
+      if (!a.sessionId) continue;
+      const list = bySession.get(a.sessionId) ?? [];
+      list.push(a);
+      bySession.set(a.sessionId, list);
+    }
+    const out: ({ kind: 'single'; item: AuditItem } | { kind: 'session'; id: string; items: AuditItem[] })[] = [];
+    const seen = new Set<string>();
+    for (const a of items ?? []) {
+      if (a.sessionId) {
+        if (seen.has(a.sessionId)) continue;
+        seen.add(a.sessionId);
+        out.push({ kind: 'session', id: a.sessionId, items: bySession.get(a.sessionId) ?? [] });
+      } else {
+        out.push({ kind: 'single', item: a });
+      }
+    }
+    return out;
+  }, [items]);
 
   return (
     <>
@@ -149,6 +222,7 @@ export function Activity() {
         </div>
       </div>
       {error && <p className="error" role="alert">{error}</p>}
+      <p className="notice" role="note" style={{ marginTop: 12 }}>🗑️ Activity logs are kept for 30 days, then deleted automatically.</p>
 
       <div className="act-legend">
         <span className="muted">Legend:</span>
@@ -159,7 +233,16 @@ export function Activity() {
       </div>
 
       <div className="act-grid">
-        {items?.map((a) => <ActivityCard key={a.id} a={a} />)}
+        {groups.map((g) => g.kind === 'single'
+          ? <ActivityCard key={g.item.id} a={g.item} />
+          : (
+            <SessionCard
+              key={g.id}
+              items={g.items}
+              collapsed={!!collapsed[g.id]}
+              onToggle={() => setCollapsed((c) => ({ ...c, [g.id]: !c[g.id] }))}
+            />
+          ))}
       </div>
       {items && items.length === 0 && <p className="muted" style={{ padding: 32, textAlign: 'center' }}>Nothing yet.</p>}
       {!items && !error && <p className="muted" style={{ padding: 32, textAlign: 'center' }}>Loading…</p>}

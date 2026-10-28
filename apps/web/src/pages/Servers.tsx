@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { api, type ActivityItem, type ImportResult, type Server, type VpsPlan } from '../api';
-import { IconArrowUpRight, IconChevronRight, IconCopy } from '../components/Icons';
+import { api, type ActivityItem, type ImportResult, type Server } from '../api';
+import { IconChevronRight, IconCopy } from '../components/Icons';
 import { Badge } from '../components/Badge';
 import { Modal } from '../components/Modal';
 import { actorLabel, actorType, planLabel, sourceLabel, statusOf, secondaryStatus, joinList, ago, parseDevice } from '../format';
@@ -68,26 +68,6 @@ function ConnectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   );
 }
 
-function OrderModal({ onClose, plans }: { onClose: () => void; plans: VpsPlan[] }) {
-  return (
-    <Modal titleId="order-h" title="Order a new VPS" onClose={onClose}>
-      <p className="muted" style={{ margin: '8px 0 16px' }}>Pricing and specs come straight from your billing system. Payment happens there too — this just opens the right plan in your cart.</p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {plans.map((p) => (
-          <a key={p.id} className="plan-card" href={p.orderUrl} target="_blank" rel="noopener noreferrer">
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 600 }}>{p.name}</div>
-              {p.description && <div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>{p.description}</div>}
-            </div>
-            {p.price && <div className="plan-price">{p.price}<span className="muted">{p.cycle}</span></div>}
-            <IconArrowUpRight className="chev" />
-          </a>
-        ))}
-      </div>
-    </Modal>
-  );
-}
-
 const STATUS_META: Record<string, { icon: string; color: string; bg: string }> = {
   running: { icon: '●', color: '#166534', bg: '#dcfce7' },
   provisioning: { icon: '◐', color: '#92400e', bg: '#fef3c7' },
@@ -148,10 +128,8 @@ function ServerRow({ s }: { s: Server }) {
 export function Servers() {
   const [servers, setServers] = useState<Server[] | null>(null);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
-  const [plans, setPlans] = useState<VpsPlan[]>([]);
   const [error, setError] = useState('');
   const [connecting, setConnecting] = useState(false);
-  const [ordering, setOrdering] = useState(false);
 
   const load = () => {
     api.servers().then(setServers).catch((e) => setError(e.message));
@@ -159,7 +137,6 @@ export function Servers() {
   };
   useEffect(() => {
     load();
-    api.vpsPlans().then((r) => setPlans(r.plans)).catch(() => setPlans([]));
     const t = setInterval(load, 5000);
     return () => clearInterval(t);
   }, []);
@@ -182,15 +159,11 @@ export function Servers() {
           </div>
         </div>
         <div className="srv-actions">
-          {plans.length > 0 && (
-            <button className="btn" onClick={() => setOrdering(true)}>Order a new VPS</button>
-          )}
           <button className="btn p" onClick={() => setConnecting(true)}>Connect existing VPS</button>
         </div>
       </div>
       {error && <p className="error">{error}</p>}
       {connecting && <ConnectModal onClose={() => setConnecting(false)} onCreated={load} />}
-      {ordering && <OrderModal onClose={() => setOrdering(false)} plans={plans} />}
 
       <div className="srv-stats">
         <StatCard
@@ -247,9 +220,8 @@ export function Servers() {
               <div className="empty-state" style={{ height: 'auto', padding: '48px 20px', margin: 0, border: 0 }}>
                 <div style={{ fontSize: 48 }}>🖥️</div>
                 <b style={{ fontSize: 17 }}>No servers yet</b>
-                <span>Order a new VPS or connect one you already have.</span>
+                <span>Connect a VPS you already have to start managing it here.</span>
                 <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-                  {plans.length > 0 && <button className="btn" onClick={() => setOrdering(true)}>Order a new VPS</button>}
                   <button className="btn p" onClick={() => setConnecting(true)}>Connect existing VPS</button>
                 </div>
               </div>

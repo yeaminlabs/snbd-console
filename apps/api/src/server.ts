@@ -24,7 +24,6 @@ import { registerTokens } from './tokens.js';
 import { registerSshKeys } from './sshKeys.js';
 import { registerMcp } from './mcp.js';
 import { registerOAuth } from './oauth.js';
-import { registerVpsPlans } from './vpsPlans.js';
 import { failPending, failRunningJobs, onJobDone, onJobLog, onRpcResult } from './agentRpc.js';
 
 const HEARTBEAT_STORE_EVERY_MS = 60_000;
@@ -75,7 +74,6 @@ registerTokens(app);
 registerSshKeys(app);
 registerMcp(app);
 registerOAuth(app);
-registerVpsPlans(app);
 
 // ---- auth -----------------------------------------------------------------
 
@@ -221,7 +219,7 @@ app.get<{ Querystring: { server?: string; before?: string; limit?: string } }>('
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
   const before = Number(req.query.before) || null;
   const { rows } = await pool.query(
-    `select a.id, a.action, a.at, a.meta, a.client_id is null as system, a.via, a.ip_address, a.user_agent, a.location,
+    `select a.id, a.action, a.at, a.meta, a.client_id is null as system, a.via, a.ip_address, a.user_agent, a.location, a.session_id as "sessionId",
         s.id as "serverId", coalesce(s.name, 'Account') as server
      from audit_log a left join servers s on s.id = a.server_id
      where (s.client_id = $1 or (s.id is null and a.client_id = $1)) and ($2::uuid is null or s.id = $2) and ($3::bigint is null or a.id < $3)

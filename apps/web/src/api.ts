@@ -33,7 +33,7 @@ export interface OsImage { image: string; name: string; ver: string; brand: stri
 export interface FileEntry { name: string; type: 'dir' | 'file' | 'other'; link?: boolean; size: number; mode: string; mtime: number }
 export interface AppInfo { id: string; name: string; tag: string; desc: string; installed: boolean | null }
 export interface JobState { status: 'queued' | 'running' | 'done' | 'failed'; app: string; offset: number; log: string; pct: number; step: string }
-export interface AuditItem { id: number; action: string; at: string; meta: Record<string, any>; system: boolean; via: string | null; serverId: string; server: string; ip_address: string | null; user_agent: string | null; location: string | null }
+export interface AuditItem { id: number; action: string; at: string; meta: Record<string, any>; system: boolean; via: string | null; sessionId: string | null; serverId: string; server: string; ip_address: string | null; user_agent: string | null; location: string | null }
 export interface OAuthRequestInfo { clientName: string; returnsTo: string; servers: { id: string; name: string }[]; access: string }
 export interface TokenInfo { kind: 'token' | 'connector'; id: string; name: string; prefix: string; scope: 'read' | 'deploy'; serverIds: string[] | null; serverNames: string[]; expiresAt: string | null; lastUsedAt: string | null; createdAt: string }
 export interface McpConnection {
@@ -57,7 +57,6 @@ export interface McpConnection {
 export interface McpInfo { url: string; connections: McpConnection[]; connectedCount: number }
 export interface ActivityItem { id: number; action: string; at: string; server: string; ip_address: string | null; user_agent: string | null; location: string | null; via: string | null }
 export interface ImportResult { serverId: string; token: string; expiresInMinutes: number; panelUrl: string }
-export interface VpsPlan { id: number; name: string; description: string; price: string | null; cycle: string | null; orderUrl: string }
 export interface SshKey {
   id: string;
   name: string;
@@ -104,13 +103,12 @@ export const api = {
   audit: (server: string, before: number | null) => fetch(`/api/audit?limit=50${server ? `&server=${server}` : ''}${before ? `&before=${before}` : ''}`).then(json<{ items: AuditItem[]; next: number | null }>),
   tokens: () => fetch('/api/tokens').then(json<TokenInfo[]>),
   mcpConnections: () => fetch('/api/mcp/connections').then(json<McpInfo>),
-  createToken: (name: string, serverIds: string[] | null, expiresInDays: number | null) => post('/api/tokens', { name, serverIds, expiresInDays }).then(json<{ id: string; token: string; expiresAt: string | null }>),
+  createToken: (name: string, serverIds: string[] | null, expiresInDays: number | null, scope: 'read' | 'deploy' = 'read') => post('/api/tokens', { name, serverIds, expiresInDays, scope }).then(json<{ id: string; token: string; expiresAt: string | null }>),
   revokeToken: (id: string) => fetch(`/api/tokens/${id}`, { method: 'DELETE' }).then(json<{ ok: true }>),
   oauthRequest: (id: string) => fetch(`/api/oauth/request/${id}`).then(json<OAuthRequestInfo>),
   oauthApprove: (id: string, serverIds: string[] | null) => post(`/api/oauth/request/${id}/approve`, { serverIds }).then(json<{ redirect: string }>),
   oauthDeny: (id: string) => post(`/api/oauth/request/${id}/deny`, {}).then(json<{ redirect: string }>),
   importServer: (name: string) => post('/api/servers/import', { name }).then(json<ImportResult>),
-  vpsPlans: () => fetch('/api/vps-plans').then(json<{ plans: VpsPlan[]; stale?: boolean }>),
   keys: () => fetch('/api/keys').then(json<{ keys: SshKey[] }>),
   createKey: (name: string, mode: 'generate' | 'import', publicKey?: string) => post('/api/keys', { name, mode, publicKey }).then(json<{ key: SshKey; privateKey: string | null }>),
   deleteKey: (id: string) => fetch(`/api/keys/${id}`, { method: 'DELETE' }).then(json<{ ok: true }>),

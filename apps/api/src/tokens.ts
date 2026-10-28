@@ -88,7 +88,7 @@ export function describeClient(userAgent: string | null, fallbackName: string | 
 
 const CreateBody = z.object({
   name: z.string().trim().min(1).max(60),
-  scope: z.enum(['read']).default('read'), // MCP currently grants every token the full tool set; the column is kept for future limits
+  scope: z.enum(['read', 'deploy']).default('read'),
   serverIds: z.array(z.string().uuid()).max(100).nullable().default(null),
   expiresInDays: z.number().int().min(1).max(365).nullable().default(90),
 });

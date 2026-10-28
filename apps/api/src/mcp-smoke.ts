@@ -27,14 +27,15 @@ check('agent for mcp-alpha online', await until(async () => (await pool.query("s
 
 // ---- token management (signed-in only)
 check('token list needs sign-in', (await j('/api/tokens')).status === 401);
-const t1 = await j('/api/tokens', { method: 'POST', headers: H, body: JSON.stringify({ name: 'Claude laptop' }) });
+const t1 = await j('/api/tokens', { method: 'POST', headers: H, body: JSON.stringify({ name: 'Claude laptop', scope: 'deploy' }) });
 check('token created, shown once, snbd_ prefix', t1.status === 200 && /^snbd_[A-Za-z0-9_-]{40,}$/.test(t1.body.token) && t1.headers.get('cache-control') === 'no-store');
 const tok = t1.body.token as string;
 check('only the hash is stored', (await pool.query('select count(*)::int n from api_tokens where token_hash = $1', [tok])).rows[0].n === 0);
+check("deploy scope is persisted", (await pool.query('select scope from api_tokens where id = $1', [t1.body.id])).rows[0].scope === 'deploy');
 const list1 = await j('/api/tokens', { headers: { cookie } });
 check('list shows prefix, never the token', list1.body.some((t: any) => t.name === 'Claude laptop' && tok.startsWith(t.prefix)) && !JSON.stringify(list1.body).includes(tok));
 check('cannot scope a token to a server that is not yours', (await j('/api/tokens', { method: 'POST', headers: H, body: JSON.stringify({ name: 'x', serverIds: ['00000000-0000-4000-8000-000000000000'] }) })).status === 400);
-check("'deploy' scope is not available yet", (await j('/api/tokens', { method: 'POST', headers: H, body: JSON.stringify({ name: 'x', scope: 'deploy' }) })).status === 400);
+check('scope defaults to read when omitted', (await j('/api/tokens', { method: 'POST', headers: H, body: JSON.stringify({ name: 'x' }) })).body.id && (await pool.query("select scope from api_tokens where name = 'x'")).rows[0].scope === 'read');
 const t2 = await j('/api/tokens', { method: 'POST', headers: H, body: JSON.stringify({ name: 'Only alpha', serverIds: [A.serverId], expiresInDays: 7 }) });
 check('scoped token created', t2.status === 200);
 
@@ -95,6 +96,18 @@ check('scoped token sees only its server', ls2.count === 1 && ls2.servers[0].nam
 check('scoped token cannot reach another server', (await call(c2, 'server_status', { server: 'mcp-beta' })).isError === true);
 await c2.close();
 
+// ---- read-only scope is enforced
+const t4 = await j('/api/tokens', { method: 'POST', headers: H, body: JSON.stringify({ name: 'Read only', scope: 'read' }) });
+check('read-only token created', t4.status === 200);
+const c4 = await connect(t4.body.token);
+const roTools = (await c4.listTools()).tools.map((t) => t.name).sort();
+check('read-only connection is not even offered the deploy tools', roTools.join() === 'get_public_ip,list_files,list_servers,read_file,server_status,view_logs');
+const denied = await call(c4, 'run_command', { server: 'mcp-alpha', command: 'echo hi' });
+check('read-only token is refused a deploy tool', denied.isError === true && /read-only/i.test(text(denied)), text(denied));
+check('read-only token can still use a read tool', (await call(c4, 'list_servers', {})).isError !== true);
+await c4.close();
+check('scope denial is audited', (await pool.query("select 1 from audit_log where server_id = $1 and action = 'mcp.run_command' and meta->>'error' = 'scope denied'", [A.serverId])).rowCount! > 0);
+
 // ---- raw protocol
 const post = (body: unknown, headers: Record<string, string> = { Authorization: `Bearer ${tok}` }, raw = false) =>
   fetch(base + '/mcp', { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: raw ? (body as string) : JSON.stringify(body) });
@@ -135,7 +148,7 @@ const t3 = await j('/api/tokens', { method: 'POST', headers: H, body: JSON.strin
 check('repeated bad tokens are throttled (even a good token is refused for a while)', last === 401 && (await post({ jsonrpc: '2.0', id: 1, method: 'ping' }, { Authorization: `Bearer ${t3.body.token}` })).status === 401);
 
 proc.kill('SIGKILL');
-await pool.query("delete from servers where name like 'mcp-%'; delete from api_tokens where name in ('Claude laptop', 'Only alpha', 'after-blocked', 'x')");
+await pool.query("delete from servers where name like 'mcp-%'; delete from api_tokens where name in ('Claude laptop', 'Only alpha', 'Read only', 'after-blocked', 'x')");
 await pool.end();
 console.log(failed ? `\n${failed} FAILED` : '\nall passed');
 process.exit(failed ? 1 : 0);

@@ -186,6 +186,7 @@ export function Agents() {
   const [only, setOnly] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
   const [days, setDays] = useState<string>('90');
+  const [access, setAccess] = useState<'read' | 'deploy'>('read');
   const [fresh, setFresh] = useState<{ name: string; token: string } | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [showMasterPrompt, setShowMasterPrompt] = useState(false);
@@ -206,9 +207,9 @@ export function Agents() {
     e.preventDefault();
     setBusy(true); setError('');
     try {
-      const r = await api.createToken(name.trim(), only ? picked : null, days === 'never' ? null : Number(days));
+      const r = await api.createToken(name.trim(), only ? picked : null, days === 'never' ? null : Number(days), access);
       setFresh({ name: name.trim(), token: r.token });
-      setName(''); setOnly(false); setPicked([]);
+      setName(''); setOnly(false); setPicked([]); setAccess('read');
       load();
     } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
   }
@@ -563,12 +564,17 @@ export function Agents() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     <b style={{ fontSize: '14px' }}>{t.name}</b>
                     <span className={`badge ${t.kind === 'connector' ? 'ok' : 'info'}`}>{t.kind === 'connector' ? '✓ Approved App' : '🔑 Token'}</span>
-                    <span className="badge" style={{ background: 'var(--red-tint)', color: 'var(--red-dark)' }}>⚡ Full Access</span>
+                    {t.scope === 'deploy' ? (
+                      <span className="badge" style={{ background: 'var(--red-tint)', color: 'var(--red-dark)' }}>⚡ Full Access</span>
+                    ) : (
+                      <span className="badge">👁️ Read-only</span>
+                    )}
                   </div>
                   <button className="link-btn danger" onClick={() => revoke(t)} aria-label={`${t.kind === 'connector' ? 'Disconnect' : 'Revoke'} ${t.name}`}>{t.kind === 'connector' ? 'Disconnect' : 'Revoke'}</button>
                 </div>
                 <div className="muted" style={{ fontSize: '12.5px', marginTop: '6px', lineHeight: '1.5' }}>
                   {t.serverIds ? `🎯 Servers: ${t.serverNames.join(', ') || 'selected servers'}` : '🌐 All your servers'} · Last used {when(t.lastUsedAt)} · {t.expiresAt ? `${t.kind === 'connector' ? '🔄 Needs re-approval' : '⏰ Expires'} ${when(t.expiresAt)}` : '♾️ No expiry'}
+                  {t.kind === 'connector' && <> · Connectors currently always get full access</>}
                 </div>
               </div>
             ))}
@@ -579,6 +585,11 @@ export function Agents() {
             <form onSubmit={create} style={{ marginTop: '12px' }}>
               <div className="field"><label htmlFor="tk-name">Token Name</label><input id="tk-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Custom Client" maxLength={60} required /></div>
               <fieldset className="fieldset">
+                <legend>Access Level</legend>
+                <label className="check"><input type="radio" name="access" checked={access === 'read'} onChange={() => setAccess('read')} />Read-only — status, logs, files</label>
+                <label className="check"><input type="radio" name="access" checked={access === 'deploy'} onChange={() => setAccess('deploy')} />Full access — also run commands, write files, restart services</label>
+              </fieldset>
+              <fieldset className="fieldset" style={{ marginTop: '12px' }}>
                 <legend>Server Access Scope</legend>
                 <label className="check"><input type="radio" name="scope" checked={!only} onChange={() => setOnly(false)} />All my servers</label>
                 <label className="check"><input type="radio" name="scope" checked={only} onChange={() => setOnly(true)} />Only selected servers</label>
@@ -595,7 +606,7 @@ export function Agents() {
                 </select>
               </div>
               <button className="btn p" style={{ width: '100%', background: 'linear-gradient(135deg, var(--red) 0%, #dc2626 100%)', border: 'none' }} disabled={busy || !name.trim() || (only && picked.length === 0)}>{busy ? 'Creating...' : 'Create Token'}</button>
-              <p className="muted" style={{ fontSize: '11.5px', margin: '8px 0 0', lineHeight: '1.4' }}>Tokens grant full access to selected servers.</p>
+              <p className="muted" style={{ fontSize: '11.5px', margin: '8px 0 0', lineHeight: '1.4' }}>Read-only tokens can't run commands, write files, or restart services — good for monitoring or lower-trust integrations.</p>
             </form>
           </section>
         </div>

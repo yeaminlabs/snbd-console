@@ -410,7 +410,7 @@ async function handleMessage(msg: any, auth: TokenAuth, ctx: AuditContext): Prom
       return rpcResult(msg.id, {});
     case 'tools/list':
       return rpcResult(msg.id, {
-        tools: TOOLS.map((t) => ({
+        tools: TOOLS.filter((t) => t.scope !== 'deploy' || auth.scope === 'deploy').map((t) => ({
           name: t.name, title: t.title, description: t.description, inputSchema: t.inputSchema,
           annotations: {
             readOnlyHint: t.readOnlyHint ?? (t.scope === 'read'),
@@ -423,19 +423,24 @@ async function handleMessage(msg: any, auth: TokenAuth, ctx: AuditContext): Prom
     case 'tools/call': {
       const tool = TOOLS.find((t) => t.name === msg.params?.name);
       if (!tool) return rpcError(msg.id, -32602, `Unknown tool: ${String(msg.params?.name).slice(0, 60)}`);
+      if (tool.scope === 'deploy' && auth.scope !== 'deploy') {
+        const sid = await bestEffortServerId(auth, (msg.params?.arguments as any)?.server).catch(() => null);
+        await audit(auth.clientId, sid, `mcp.${tool.name}`, { ...safeFailureMeta(tool.name, msg.params?.arguments), error: 'scope denied' }, auth.name, ctx).catch(() => {});
+        return rpcResult(msg.id, { isError: true, content: [{ type: 'text', text: 'This connection is read-only. Create a token with deploy access in the panel to run_command, write_file or restart_service.' }] });
+      }
       const parsed = tool.args.safeParse(msg.params?.arguments ?? {});
       if (!parsed.success) {
         return rpcResult(msg.id, { isError: true, content: [{ type: 'text', text: 'Invalid arguments: ' + parsed.error.issues.map((i) => `${i.path.join('.') || 'arguments'}: ${i.message}`).join('; ') }] });
       }
       try {
         const out = await tool.run(auth, parsed.data);
-        if (out.serverId) await audit(auth.clientId, out.serverId, `mcp.${tool.name}`, out.audit ?? {}, auth.name, ctx).catch(() => {});
+        if (out.serverId) await audit(auth.clientId, out.serverId, `mcp.${tool.name}`, out.audit ?? {}, auth.name, ctx, auth.tokenId).catch(() => {});
         return rpcResult(msg.id, { content: [{ type: 'text', text: out.text }] });
       } catch (e) {
         if (e instanceof ToolError) {
           // a failed attempt is still an action: log what was tried (safe meta only, never file content)
           const sid = await bestEffortServerId(auth, (msg.params?.arguments as any)?.server).catch(() => null);
-          await audit(auth.clientId, sid, `mcp.${tool.name}`, { ...safeFailureMeta(tool.name, msg.params?.arguments), error: e.message.slice(0, 300) }, auth.name, ctx).catch(() => {});
+          await audit(auth.clientId, sid, `mcp.${tool.name}`, { ...safeFailureMeta(tool.name, msg.params?.arguments), error: e.message.slice(0, 300) }, auth.name, ctx, auth.tokenId).catch(() => {});
           return rpcResult(msg.id, { isError: true, content: [{ type: 'text', text: e.message }] });
         }
         console.error('mcp tool failed', tool.name, e);

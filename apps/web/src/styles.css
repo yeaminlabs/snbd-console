@@ -203,6 +203,9 @@ a.nav-item:hover { background: var(--bg); color: var(--ink); }
 .act-exit.ok { color: #166534; background: #dcfce7; border: 1px solid #86efac; }
 .act-exit.bad { color: #991b1b; background: #fee2e2; border: 1px solid #fecaca; }
 .act-err { margin-top: 8px; font-size: 12.5px; color: #991b1b; }
+.act-session-log { list-style: none; margin: 12px 0 0; padding: 12px 0 0; border-top: 1px solid var(--line-2); display: flex; flex-direction: column; gap: 12px; }
+.act-session-row { display: flex; gap: 10px; align-items: flex-start; }
+.act-session-time { font-size: 11px; white-space: nowrap; padding-top: 3px; flex: 0 0 auto; }
 
 /* ── Overview ─────────────────────────────────────────────────────────── */
 .ov-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 20px; }
@@ -250,13 +253,6 @@ a.srow:focus-visible { outline: 2px solid var(--red); outline-offset: -2px; }
 .srow:hover .name { color: var(--red-dark); }
 .srow .chev { color: #c4c4c8; transition: transform .15s var(--ease), color .15s var(--ease); flex: 0 0 auto; }
 .srow:hover .chev { color: var(--muted); transform: translateX(2px); }
-
-/* VPS plan picker */
-.plan-card { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: var(--radius-sm); border: 1px solid var(--line); text-decoration: none; color: var(--ink); transition: border-color .12s var(--ease), background-color .12s var(--ease); }
-.plan-card:hover { background: var(--bg); border-color: #d4d4d8; }
-.plan-card:hover .chev { color: var(--muted); transform: translateX(2px); }
-.plan-price { text-align: right; font-weight: 600; white-space: nowrap; font-size: 14px; }
-.plan-price span { display: block; font-weight: 500; font-size: 11px; color: var(--muted); }
 
 /* modal */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(24,24,27,.45); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; animation: fade-in .15s var(--ease); }
