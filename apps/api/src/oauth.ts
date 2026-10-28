@@ -159,10 +159,10 @@ export function registerOAuth(app: FastifyInstance) {
     if (!r) return reply.code(404).send({ error: 'This approval request has expired. Start the connection again in the app.' });
     const servers = (await pool.query('select id, name from servers where client_id = $1 and terminated_at is null order by name', [me.id])).rows;
     const u = new URL(r.redirect_uri);
-    return { clientName: r.client_name, returnsTo: u.protocol === 'http:' || u.protocol === 'https:' ? u.host : `${u.protocol}//`, servers, access: 'Full access: servers, logs, files, commands and services' };
+    return { clientName: r.client_name, returnsTo: u.protocol === 'http:' || u.protocol === 'https:' ? u.host : `${u.protocol}//`, servers, access: 'Read status, logs and files. Tick full access below to also run commands, write files and restart services.' };
   });
 
-  const ApproveBody = z.object({ serverIds: z.array(z.string().uuid()).max(100).nullable().default(null) });
+  const ApproveBody = z.object({ serverIds: z.array(z.string().uuid()).max(100).nullable().default(null), scope: z.enum(['read', 'deploy']).default('read') });
   app.post<{ Params: { id: string } }>('/api/oauth/request/:id/approve', async (req, reply) => {
     const me = await clientFromRequest(req);
     if (!me) return reply.code(401).send({ error: 'Not signed in' });
@@ -180,11 +180,11 @@ export function registerOAuth(app: FastifyInstance) {
     }
     const client = (await pool.query('select client_name from oauth_clients where client_id = $1', [r.client_id])).rows[0];
     const grant = (await pool.query(
-      `insert into oauth_grants (user_client_id, oauth_client_id, name, server_ids, expires_at) values ($1, $2, $3, $4, now() + make_interval(secs => $5)) returning id`,
-      [me.id, r.client_id, `${client.client_name} (connector)`, serverIds, GRANT_TTL_S])).rows[0];
+      `insert into oauth_grants (user_client_id, oauth_client_id, name, server_ids, scope, expires_at) values ($1, $2, $3, $4, $5, now() + make_interval(secs => $6)) returning id`,
+      [me.id, r.client_id, `${client.client_name} (connector)`, serverIds, body.data.scope, GRANT_TTL_S])).rows[0];
     const code = rand();
     await pool.query(`insert into oauth_codes (code_hash, grant_id, redirect_uri, code_challenge, expires_at) values ($1, $2, $3, $4, now() + make_interval(secs => $5))`, [sha256(code), grant.id, r.redirect_uri, r.code_challenge, CODE_TTL_S]);
-    await audit(me.id, null, 'oauth.approve', { app: client.client_name }, null, requestContext(req));
+    await audit(me.id, null, 'oauth.approve', { app: client.client_name, scope: body.data.scope }, null, requestContext(req));
     return { redirect: withState(r.redirect_uri, { code }, r.state) };
   });
 

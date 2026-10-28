@@ -60,7 +60,7 @@ function ConnectionCard({ c, onDisconnect }: { c: McpConnection; onDisconnect: (
         <button className="link-btn danger" onClick={() => onDisconnect(c)} aria-label={`Disconnect ${c.name}`}>Disconnect</button>
       </div>
       <div className="mcp-conn-meta">
-        <span className="mcp-chip mcp-chip-full">⚡ Full access</span>
+        {c.scope === 'deploy' ? <span className="mcp-chip mcp-chip-full">⚡ Full access</span> : <span className="mcp-chip">👁️ Read-only</span>}
         <span className="mcp-chip">{c.servers ? (c.servers.length === 1 ? c.servers[0] : `${c.servers.length} servers`) : '🌐 All servers'}</span>
         {c.kind === 'connector' && <span className="mcp-chip muted">✓ Approved app</span>}
         {c.expiresAt && <span className="mcp-chip muted">⏱ Access ends {when(c.expiresAt)}</span>}
@@ -574,7 +574,7 @@ export function Agents() {
                 </div>
                 <div className="muted" style={{ fontSize: '12.5px', marginTop: '6px', lineHeight: '1.5' }}>
                   {t.serverIds ? `🎯 Servers: ${t.serverNames.join(', ') || 'selected servers'}` : '🌐 All your servers'} · Last used {when(t.lastUsedAt)} · {t.expiresAt ? `${t.kind === 'connector' ? '🔄 Needs re-approval' : '⏰ Expires'} ${when(t.expiresAt)}` : '♾️ No expiry'}
-                  {t.kind === 'connector' && <> · Connectors currently always get full access</>}
+                  {t.kind === 'connector' && t.scope === 'read' && <> · Read-only: approve again and tick “Allow changes too” for full access</>}
                 </div>
               </div>
             ))}

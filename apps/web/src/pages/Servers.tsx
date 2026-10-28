@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, type ActivityItem, type ImportResult, type Server } from '../api';
+import { PROVIDERS } from '../components/ProviderLogos';
 import { IconChevronRight, IconCopy } from '../components/Icons';
 import { Badge } from '../components/Badge';
 import { Modal } from '../components/Modal';
@@ -11,7 +12,7 @@ const activityLabel: Record<string, string> = {
   'terminal.open': 'Terminal opened',
 };
 
-function ConnectModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+function ConnectModal({ onClose, onCreated, reconnect }: { onClose: () => void; onCreated: () => void; reconnect?: { id: string; name: string } }) {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -33,6 +34,18 @@ function ConnectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
     }
   }
 
+  // Opened from the "no agent" banner for a specific server: skip the name
+  // step and go straight to that server's install command.
+  useEffect(() => {
+    if (!reconnect) return;
+    setBusy(true);
+    setError('');
+    api.reconnectAgent(reconnect.id)
+      .then((r) => { setResult(r); onCreated(); })
+      .catch((err) => setError((err as Error).message))
+      .finally(() => setBusy(false));
+  }, [reconnect?.id]);
+
   const command = result ? `curl -fsSL ${result.panelUrl || location.origin}/enroll/${result.token} | sh` : '';
   async function copy() {
     try {
@@ -43,27 +56,65 @@ function ConnectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   }
 
   return (
-    <Modal titleId="connect-h" title="Connect an existing VPS" onClose={onClose}>
-      <p className="muted" style={{ margin: '8px 0 16px' }}>Run this once as root on any Linux server to link it to your panel.</p>
-      {result ? (
+    <Modal titleId="connect-h" title={reconnect ? `Connect ${reconnect.name}` : 'Connect an existing VPS'} onClose={onClose} wide>
+      {reconnect ? (
+        <p className="muted" style={{ margin: '8px 0 4px' }}>
+          The agent on <b style={{ color: 'var(--ink)' }}>{reconnect.name}</b> isn't talking to the panel. Run the command below on that server as root and it will link itself back up.
+        </p>
+      ) : (
+        <p className="muted" style={{ margin: '8px 0 4px' }}>
+          Got a VPS somewhere else? Add it here and run everything from one place. Any Linux server works.
+        </p>
+      )}
+      <div className="muted" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.06em', marginTop: 12 }}>ADD SERVERS FROM</div>
+      <div className="prov-grid">
+        {PROVIDERS.map((p) => (
+          <span key={p.name} className="prov-chip" title={`Works with ${p.name}`}>
+            {p.img
+              ? <img src={p.img} alt="" width={26} height={26} />
+              : p.mark}
+            <span>{p.name}</span>
+          </span>
+        ))}
+      </div>
+      {busy && !result ? (
+        <p className="muted" style={{ margin: '16px 0' }}>Generating your command…</p>
+      ) : result ? (
         <>
+          <div className="conn-steps">
+            <div className="conn-step"><span className="conn-num">1</span><span>Copy the command below</span></div>
+            <div className="conn-step"><span className="conn-num">2</span><span>Run it on {reconnect ? 'that server' : 'your server'} as root — takes about a minute</span></div>
+            <div className="conn-step"><span className="conn-num">3</span><span>Come back here, it's linked and ready</span></div>
+          </div>
           <div className="codebox mono" tabIndex={0}>{command}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
             <button className="btn" onClick={copy}><IconCopy />{copied ? 'Copied' : 'Copy'}</button>
             <span className="muted" style={{ fontSize: 12 }}>One-time token, expires in {result.expiresInMinutes} minutes.</span>
           </div>
-          <button className="btn-link" onClick={() => setResult(null)}>Add another</button>
+          <div className="conn-get">
+            <div className="muted" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.06em', marginBottom: 8 }}>ONCE IT'S LINKED YOU GET</div>
+            <ul>
+              <li><b>Terminal</b> — a root shell in your browser</li>
+              <li><b>Files</b> — browse and edit anything on disk</li>
+              <li><b>Apps</b> — one-click installs (Docker, Node, n8n, …)</li>
+              <li><b>Stats</b> — live CPU, RAM and disk, plus history</li>
+              <li><b>Activity</b> — every action logged, kept 30 days</li>
+              <li><b>MCP</b> — point Claude, Cursor or OpenCode at it and let AI do the work</li>
+            </ul>
+          </div>
+          {!reconnect && <button className="btn-link" onClick={() => setResult(null)}>Add another</button>}
         </>
       ) : (
-        <form onSubmit={submit}>
+        <form onSubmit={submit} style={{ marginTop: 12 }}>
           <div className="field" style={{ marginBottom: 12 }}>
             <label htmlFor="srv-name">Server name</label>
             <input id="srv-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. legacy-site" maxLength={60} required autoFocus />
           </div>
-          {error && <p className="error" role="alert">{error}</p>}
+          {error && !reconnect && <p className="error" role="alert">{error}</p>}
           <button className="btn p" disabled={busy || !name.trim()}>{busy ? 'Creating…' : 'Generate command'}</button>
         </form>
       )}
+      {error && reconnect && <p className="error" role="alert" style={{ marginTop: 12 }}>{error}</p>}
     </Modal>
   );
 }
@@ -130,6 +181,8 @@ export function Servers() {
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [error, setError] = useState('');
   const [connecting, setConnecting] = useState(false);
+  const [reconnecting, setReconnecting] = useState<{ id: string; name: string } | null>(null);
+  const offlineServers = servers?.filter((s) => !s.agentConnected) ?? [];
 
   const load = () => {
     api.servers().then(setServers).catch((e) => setError(e.message));
@@ -163,7 +216,21 @@ export function Servers() {
         </div>
       </div>
       {error && <p className="error">{error}</p>}
+      {offlineServers.length > 0 && (
+        <div className="notice" role="status" style={{ marginTop: 12 }}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>⚠️ No panel agent found — install it so this panel can manage these servers.</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {offlineServers.map((s) => (
+              <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ flex: 1, minWidth: 120 }}>{s.name}</span>
+                <button className="btn" onClick={() => setReconnecting({ id: s.id, name: s.name })}>Show install command</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {connecting && <ConnectModal onClose={() => setConnecting(false)} onCreated={load} />}
+      {reconnecting && <ConnectModal onClose={() => setReconnecting(null)} onCreated={load} reconnect={reconnecting} />}
 
       <div className="srv-stats">
         <StatCard
@@ -191,7 +258,7 @@ export function Servers() {
           label="Total vCPU / RAM"
           value={vcpu}
           sub={`/ ${ram} GB`}
-          accent="#2563eb"
+          accent="#d50c2d"
           icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"/></svg>}
         />
       </div>

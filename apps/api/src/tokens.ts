@@ -32,7 +32,7 @@ export async function authenticateToken(header: string | undefined, ip: string, 
   if (!rows[0]) {
     // not a personal token: maybe an access token issued to a connector through OAuth
     const o = (await pool.query(
-      `select g.id, g.user_client_id as client_id, g.name, 'read' as scope, g.server_ids
+      `select g.id, g.user_client_id as client_id, g.name, g.scope, g.server_ids
        from oauth_tokens t join oauth_grants g on g.id = t.grant_id
        where t.token_hash = $1 and t.kind = 'access' and t.expires_at > now() and g.revoked_at is null and g.expires_at > now()`,
       [sha256(m[1])],
@@ -42,7 +42,7 @@ export async function authenticateToken(header: string | undefined, ip: string, 
         "update oauth_grants set last_used_at = now(), last_ip = $2, last_user_agent = $3 where id = $1 and (last_used_at is null or last_used_at < now() - interval '1 minute')",
         [o.id, ip, ua],
       ).catch(() => {});
-      return { tokenId: o.id, clientId: o.client_id, name: o.name, scope: 'read', serverIds: o.server_ids };
+      return { tokenId: o.id, clientId: o.client_id, name: o.name, scope: o.scope, serverIds: o.server_ids };
     }
     badTokens.fail(ip);
     return null;
@@ -110,7 +110,7 @@ export function registerTokens(app: FastifyInstance) {
            and (t.expires_at is null or t.expires_at > now())   -- an expired key is not a live connection
            and t.name <> 'AI session'            -- the in-panel chat's short-lived keys are not a connection
          union all
-         select g.id, 'connector', g.name, 'read', g.server_ids,
+         select g.id, 'connector', g.name, g.scope, g.server_ids,
                 g.last_used_at, host(g.last_ip), g.last_user_agent, g.created_at, g.expires_at, c.client_name
          from oauth_grants g left join oauth_clients c on c.client_id = g.oauth_client_id
          where g.user_client_id = $1 and g.revoked_at is null and g.expires_at > now()`,
@@ -133,7 +133,7 @@ export function registerTokens(app: FastifyInstance) {
         version: c.version,
         os: c.os,
         ip: r.ip,
-        scope: r.kind === 'connector' ? 'read' : r.scope,
+        scope: r.scope,
         servers: r.serverIds ? names : null, // null = every server
         serverNames: names,
         lastSeenAt: r.lastSeenAt,
@@ -162,7 +162,7 @@ export function registerTokens(app: FastifyInstance) {
     );
     // connectors approved through OAuth sit in the same list
     const grants = await pool.query(
-      `select g.id, g.name, 'connector' as prefix, 'read' as scope, g.server_ids as "serverIds", g.expires_at as "expiresAt", g.last_used_at as "lastUsedAt", g.created_at as "createdAt",
+      `select g.id, g.name, 'connector' as prefix, g.scope, g.server_ids as "serverIds", g.expires_at as "expiresAt", g.last_used_at as "lastUsedAt", g.created_at as "createdAt",
               coalesce((select array_agg(s.name order by s.name) from servers s where s.id = any(g.server_ids)), '{}') as "serverNames"
        from oauth_grants g where g.user_client_id = $1 and g.revoked_at is null and g.expires_at > now()`, [client.id]);
     return [...rows.map((r) => ({ ...r, kind: 'token' })), ...grants.rows.map((r) => ({ ...r, kind: 'connector' }))]

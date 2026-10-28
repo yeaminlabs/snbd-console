@@ -236,7 +236,7 @@ app.get('/api/activity', async (req, reply) => {
   const { rows } = await pool.query(
     `select a.id, a.action, a.at, a.ip_address, a.user_agent, a.location, a.via, s.name as server
      from audit_log a join servers s on s.id = a.server_id
-     where s.client_id = $1 and a.action in ('server.import', 'agent.connected', 'terminal.open')
+     where s.client_id = $1 and a.action in ('server.import', 'terminal.open')
      order by a.at desc limit 6`,
     [client.id],
   );
@@ -254,6 +254,21 @@ app.post('/api/servers/import', async (req, reply) => {
   await pool.query(`insert into enroll_tokens (server_id, token_hash, expires_at) values ($1, $2, now() + interval '30 minutes')`, [rows[0].id, sha256(token)]);
   await audit(client.id, rows[0].id, 'server.import', {}, null, requestContext(req));
   return { serverId: rows[0].id, token, expiresInMinutes: 30, panelUrl: process.env.PUBLIC_PANEL_URL ?? '' };
+});
+
+// "Reconnect agent": mints a one-time enroll token for a server the client owns
+// whose agent is offline or was never installed. Same 30-minute single-use token,
+// bound to the existing server instead of creating a new one.
+app.post<{ Params: { id: string } }>('/api/servers/:id/reconnect', async (req, reply) => {
+  const client = await clientFromRequest(req);
+  if (!client) return reply.code(401).send({ error: 'Not signed in' });
+  if (!z.string().uuid().safeParse(req.params.id).success) return reply.code(404).send({ error: 'Not found' });
+  const { rows } = await pool.query('select id, name from servers where id = $1 and client_id = $2 and terminated_at is null', [req.params.id, client.id]);
+  if (!rows[0]) return reply.code(404).send({ error: 'Not found' });
+  const token = randomToken(24);
+  await pool.query(`insert into enroll_tokens (server_id, token_hash, expires_at) values ($1, $2, now() + interval '30 minutes')`, [rows[0].id, sha256(token)]);
+  await audit(client.id, rows[0].id, 'agent.reconnect', {}, null, requestContext(req));
+  return { serverId: rows[0].id, name: rows[0].name, token, expiresInMinutes: 30, panelUrl: process.env.PUBLIC_PANEL_URL ?? '' };
 });
 
 // ---- agent websocket ------------------------------------------------------

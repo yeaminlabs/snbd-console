@@ -17,6 +17,7 @@ const label: Record<string, (m: Record<string, any>) => string> = {
   'reinstall.failed': () => 'Reinstall was refused by the provider',
   'provision.failed': () => 'Provisioning failed',
   'agent.connected': () => 'Agent connected',
+  'agent.reconnect': () => 'Agent reconnect started',
   'agent.disconnected': () => 'Agent disconnected',
   'agent.key_rotation_sent': () => 'Agent key rotation started',
   'agent.key_rotated': () => 'Agent key rotated',
@@ -181,12 +182,15 @@ export function Activity() {
     try { const r = await api.audit(server, next); setItems((i) => [...(i ?? []), ...r.items]); setNext(r.next); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
 
+  // Agent connect/disconnect churn is hidden: customers only see real actions.
   // Agent actions that share a session id belong to one connection: show them
   // as a single session card with its logs one after another (oldest first).
   // Everything else stays a flat card.
+  const HIDDEN = new Set(['agent.connected', 'agent.disconnected']);
+  const visible = (items ?? []).filter((a) => !HIDDEN.has(a.action));
   const groups = useMemo(() => {
     const bySession = new Map<string, AuditItem[]>();
-    for (const a of items ?? []) {
+    for (const a of visible) {
       if (!a.sessionId) continue;
       const list = bySession.get(a.sessionId) ?? [];
       list.push(a);
@@ -194,7 +198,7 @@ export function Activity() {
     }
     const out: ({ kind: 'single'; item: AuditItem } | { kind: 'session'; id: string; items: AuditItem[] })[] = [];
     const seen = new Set<string>();
-    for (const a of items ?? []) {
+    for (const a of visible) {
       if (a.sessionId) {
         if (seen.has(a.sessionId)) continue;
         seen.add(a.sessionId);
@@ -244,7 +248,7 @@ export function Activity() {
             />
           ))}
       </div>
-      {items && items.length === 0 && <p className="muted" style={{ padding: 32, textAlign: 'center' }}>Nothing yet.</p>}
+      {items && groups.length === 0 && <p className="muted" style={{ padding: 32, textAlign: 'center' }}>Nothing yet.</p>}
       {!items && !error && <p className="muted" style={{ padding: 32, textAlign: 'center' }}>Loading…</p>}
       {next !== null && (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 20 }}>

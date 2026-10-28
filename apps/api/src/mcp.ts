@@ -7,7 +7,7 @@ import { baseUrl } from './oauth.js';
 import { authenticateToken, type TokenAuth } from './tokens.js';
 
 // Model Context Protocol over "Streamable HTTP", stateless: every POST is a JSON-RPC message (or a batch) answered with plain JSON.
-// Every authenticated connection currently gets the full tool set; the scope column is recorded for future per-connection limits.
+// Scope is enforced: 'read' sees the 6 read tools, 'deploy' also gets run_command/write_file/restart_service.
 
 const SUPPORTED_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const SERVER_INFO = { name: 'snbd-console', title: 'SNBD Console', version: '0.1.0' };

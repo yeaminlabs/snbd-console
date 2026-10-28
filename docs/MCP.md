@@ -20,7 +20,7 @@ server-level call is recorded in **Activity** under the connection's name.
 Behind CloudPanel's nginx, first add the `/.well-known/oauth-` location block described in `docs/DOCKER.md` (step 3), or the app cannot find the sign-in service.
 
 1. Claude → Settings → Connectors → **Add custom connector**, address `https://<panel>/mcp` (the MCP server page shows it with a copy button).
-2. Click **Connect**. A panel page opens: sign in, choose all servers or some, read the full-access warning, then click **Allow full access**.
+2. Click **Connect**. A panel page opens: sign in, choose all servers or some. Leave it read-only, or tick **Allow changes too** for full access (commands, files, services), then approve.
 3. The connector appears under **MCP server** as an approved app and can be disconnected there at any time.
 
 Claude Code can use the same flow (`/mcp` inside Claude Code, then authenticate), or a pasted token as above.
@@ -59,7 +59,7 @@ the IP when sources disagree, do not paste secrets from logs, confirm before des
 ## OAuth details (for operators)
 OAuth 2.1 authorization code with **PKCE (S256 only)**, public clients, dynamic client registration (RFC 7591), discovery
 (`/.well-known/oauth-protected-resource`, `/.well-known/oauth-authorization-server`), token refresh with rotation, and revocation (RFC 7009).
-- **Scope:** the server advertises the `full` scope because every connection has full access to its approved servers.
+- **Scope:** OAuth approvals default to read-only; ticking **Allow changes too** stores `deploy` on the grant and unlocks `run_command`, `write_file`, `restart_service`. Personal tokens choose `read` or `deploy` at creation.
 - **Lifetimes:** access token 1 hour, refresh token 30 days (rotated on every use), a connection must be approved again after 90 days. A one-time code lasts 5 minutes.
 - **Theft response:** reusing an authorization code or an old refresh token revokes the whole connection.
 - **Who can register an app:** registration is open by design, so *where a code may be sent* is restricted. Allowed redirect addresses: `https://claude.ai`, `https://claude.com`,
@@ -69,7 +69,7 @@ OAuth 2.1 authorization code with **PKCE (S256 only)**, public clients, dynamic 
 - **Storage:** codes and tokens are stored as SHA-256 only. Expired data is cleaned up hourly.
 
 ## What is not built yet
-Creating or deleting servers through MCP, a per-connection read-only/deploy choice, and application install recipes. `restart_service`
+Creating or deleting servers through MCP, and application install recipes. `restart_service`
 handles systemd units; use `run_command` for Docker containers. The `deploy` scope exists in the database, but every MCP connection
 currently gets the full tool set regardless of the stored scope.
 

@@ -12,7 +12,7 @@
   --ok-bg: #dcfce7; --ok: #166534; --ok-dot: #22c55e;
   --warn-bg: #fef3c7; --warn: #92400e; --warn-dot: #f59e0b;
   --off-bg: #e4e4e7; --off: #3f3f46; --off-dot: #a1a1aa;
-  --info-bg: #e0e7ff; --info: #3730a3;
+  --info-bg: #fdeced; --info: #b4081f;
   --radius: 10px;
   --radius-sm: 7px;
   --shadow-1: 0 1px 2px rgba(24,24,27,.04);
@@ -206,6 +206,20 @@ a.nav-item:hover { background: var(--bg); color: var(--ink); }
 .act-session-log { list-style: none; margin: 12px 0 0; padding: 12px 0 0; border-top: 1px solid var(--line-2); display: flex; flex-direction: column; gap: 12px; }
 .act-session-row { display: flex; gap: 10px; align-items: flex-start; }
 .act-session-time { font-size: 11px; white-space: nowrap; padding-top: 3px; flex: 0 0 auto; }
+
+/* ── Provider chips (connect VPS modal) ─────────────────────────────────── */
+.prov-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 4px; }
+.prov-chip { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font-size: 12.5px; font-weight: 600; min-width: 0; }
+.prov-chip img, .prov-chip svg { width: 26px; height: 26px; object-fit: contain; border-radius: 6px; flex: 0 0 auto; }
+.prov-chip span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Connect modal steps + benefits ───────────────────────────────────────── */
+.conn-steps { display: flex; flex-direction: column; gap: 6px; margin: 14px 0 12px; }
+.conn-step { display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
+.conn-num { flex: 0 0 auto; width: 22px; height: 22px; border-radius: 999px; background: var(--red-tint, #fee2e2); color: var(--red-dark, #991b1b); font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
+.conn-get { margin-top: 16px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg, #fafafa); }
+.conn-get ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 7px; font-size: 13px; }
+.conn-get li::before { content: '✓ '; color: #16a34a; font-weight: 800; }
 
 /* ── Overview ─────────────────────────────────────────────────────────── */
 .ov-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 20px; }
