@@ -24,8 +24,11 @@ export function joinList(items: string[]): string {
   return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 }
 
+// ramGb/diskGb can arrive as raw bytes/1024**3 floats (e.g. from an agent's sysinfo report); round for display.
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
 export function planLabel(p: Plan): string {
-  const parts = [p.vcpu && `${p.vcpu} vCPU`, p.ramGb && `${p.ramGb} GB`, p.diskGb && `${p.diskGb} GB`].filter(Boolean);
+  const parts = [p.vcpu && `${p.vcpu} vCPU`, p.ramGb && `${round1(p.ramGb)} GB`, p.diskGb && `${round1(p.diskGb)} GB`].filter(Boolean);
   return parts.length ? parts.join(' · ') : '—';
 }
 

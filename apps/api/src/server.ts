@@ -386,8 +386,8 @@ app.get('/agent', { websocket: true, ...ipLimit(300) }, (socket, req) => {
         case 'sysinfo': {
           // os always refreshes (a manual reinstall changes it); vcpu/ramGb/diskGb only fill gaps so a
           // provider-provisioned plan (the authoritative, billed spec) is never overwritten by a measurement.
-          const ramGb = msg.ramTotal ? msg.ramTotal / 1024 ** 3 : null;
-          const diskGb = msg.diskTotal ? msg.diskTotal / 1024 ** 3 : null;
+          const ramGb = msg.ramTotal ? Math.round((msg.ramTotal / 1024 ** 3) * 10) / 10 : null;
+          const diskGb = msg.diskTotal ? Math.round((msg.diskTotal / 1024 ** 3) * 10) / 10 : null;
           await pool.query(
             `update servers set
                os = coalesce($2, os),

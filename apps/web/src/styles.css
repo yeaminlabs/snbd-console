@@ -156,7 +156,9 @@ a.nav-item:hover { background: var(--bg); color: var(--ink); }
 .srv-ip { font-size: 12px; margin-top: 1px; }
 .srv-row-tags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .srv-secondary { font-size: 11.5px; color: var(--muted); }
-.srv-row-specs { font-size: 13px; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.srv-row-specs { font-size: 13px; display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; min-width: 0; }
+.srv-row-specs span { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.srv-row-specs span[aria-hidden] { flex: 0 0 auto; }
 .srv-row-cpu { display: flex; align-items: center; gap: 10px; }
 .srv-cpu-bar { width: 64px; height: 5px; border-radius: 999px; background: var(--line-2); overflow: hidden; flex: 0 0 64px; }
 .srv-cpu-bar > div { height: 100%; border-radius: 999px; transition: width .4s var(--ease); }
