@@ -4,7 +4,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { APPS, CHECK_SCRIPT, findApp, loadRecipe, parseProgress } from './apps.js';
 import { RpcError, rpc, sendToAgent } from './agentRpc.js';
-import { audit, pool } from './db.js';
+import { audit, pool, requestContext } from './db.js';
 import { ownedServer } from './manage.js';
 import { clientFromRequest } from './session.js';
 
@@ -75,7 +75,7 @@ export function registerTools(app: FastifyInstance) {
     if (buf.length > 4 * 1024 * 1024) return reply.code(413).send({ error: 'File is too large to save here' });
     try {
       await rpc(g.server.id, 'fs.writefile', { path: body.data.path, data: buf.toString('base64') });
-      await audit(g.client.id, g.server.id, 'file.write', { path: body.data.path, bytes: buf.length });
+      await audit(g.client.id, g.server.id, 'file.write', { path: body.data.path, bytes: buf.length }, null, requestContext(req));
       return { ok: true, size: buf.length };
     } catch (e) { return fail(reply, e); }
   });
@@ -88,7 +88,7 @@ export function registerTools(app: FastifyInstance) {
     try { st = await rpc(g.server.id, 'fs.stat', { path: path.data }); } catch (e) { return fail(reply, e); }
     if (st.dir) return reply.code(400).send({ error: 'Folders cannot be downloaded yet' });
     const name = path.data.split('/').pop() || 'download';
-    await audit(g.client.id, g.server.id, 'file.download', { path: path.data, bytes: st.size });
+    await audit(g.client.id, g.server.id, 'file.download', { path: path.data, bytes: st.size }, null, requestContext(req));
     const sid = g.server.id;
     async function* chunks() {
       for (let offset = 0; offset < st.size; ) {
@@ -129,7 +129,7 @@ export function registerTools(app: FastifyInstance) {
         if (size >= PART) await flush(false);
       }
       await flush(true); // the final part, possibly empty, tells the agent to move the file into place
-      await audit(g.client.id, g.server.id, 'file.upload', { path, bytes: offset });
+      await audit(g.client.id, g.server.id, 'file.upload', { path, bytes: offset }, null, requestContext(req));
       return { ok: true, size: offset };
     } catch (e) { return fail(reply, e); }
   });
@@ -147,7 +147,7 @@ export function registerTools(app: FastifyInstance) {
       const [op, args] = toRpc(body.data);
       try {
         await rpc(g.server.id, op, args);
-        await audit(g.client.id, g.server.id, auditAction, body.data);
+        await audit(g.client.id, g.server.id, auditAction, body.data, null, requestContext(req));
         return { ok: true };
       } catch (e) { return fail(reply, e); }
     });
@@ -190,7 +190,7 @@ export function registerTools(app: FastifyInstance) {
       await pool.query(`update jobs set status = 'failed', finished_at = now(), log = 'The server agent is offline' where id = $1`, [jobId]);
       return reply.code(503).send({ error: 'The server agent is offline' });
     }
-    await audit(g.client.id, g.server.id, 'app.install', { app: def.id, jobId });
+    await audit(g.client.id, g.server.id, 'app.install', { app: def.id, jobId }, null, requestContext(req));
     return { jobId };
   });
 
@@ -216,7 +216,7 @@ export function registerTools(app: FastifyInstance) {
     const { rowCount } = await pool.query(`select 1 from jobs where id = $1 and server_id = $2 and status in ('queued', 'running')`, [req.params.job, g.server.id]);
     if (!rowCount) return reply.code(409).send({ error: 'Nothing to cancel' });
     sendToAgent(g.server.id, { type: 'job.cancel', jobId: req.params.job });
-    await audit(g.client.id, g.server.id, 'app.cancel', { jobId: req.params.job });
+    await audit(g.client.id, g.server.id, 'app.cancel', { jobId: req.params.job }, null, requestContext(req));
     return { ok: true };
   });
 
@@ -228,7 +228,7 @@ export function registerTools(app: FastifyInstance) {
     try {
       await rpc(g.server.id, 'setpassword', { user: 'root', password });
     } catch (e) { return fail(reply, e); }
-    await audit(g.client.id, g.server.id, 'password.reset', { user: 'root' });
+    await audit(g.client.id, g.server.id, 'password.reset', { user: 'root' }, null, requestContext(req));
     reply.header('cache-control', 'no-store');
     return { user: 'root', password };
   });

@@ -64,3 +64,40 @@ export function secondaryStatus(s: Pick<Server, 'managedBy' | 'status' | 'agentC
   if (s.status === 'running' && !s.agentConnected) return ['Agent offline', 'warn'];
   return null;
 }
+
+export function parseDevice(ua?: string | null): { name: string; os: string; browser: string } {
+  if (!ua) return { name: 'Unknown', os: 'Unknown', browser: 'Unknown' };
+  const os = /Windows NT 10/.test(ua) ? 'Windows 10/11'
+    : /Windows NT/.test(ua) ? 'Windows'
+    : /Mac OS X|macOS/.test(ua) ? 'macOS'
+    : /Linux/.test(ua) ? 'Linux'
+    : /Android/.test(ua) ? 'Android'
+    : /iPhone|iPad|iPod/.test(ua) ? 'iOS'
+    : 'Unknown';
+  const browser = /Edg\//.test(ua) ? 'Edge'
+    : /Chrome\//.test(ua) ? 'Chrome'
+    : /Safari\//.test(ua) && /Version\//.test(ua) ? 'Safari'
+    : /Firefox\//.test(ua) ? 'Firefox'
+    : /curl|wget|httpie|python-requests|node-fetch|undici/.test(ua) ? 'CLI'
+    : 'Browser';
+  const name = browser === 'CLI' ? `${os} · CLI` : `${os} · ${browser}`;
+  return { name, os, browser };
+}
+
+export type ActorType = 'human' | 'agent' | 'ai' | 'system';
+
+export function actorType(action: string, system: boolean): ActorType {
+  if (system) return 'system';
+  if (action.startsWith('mcp.') || action.startsWith('oauth.')) return 'ai';
+  if (action.startsWith('agent.')) return 'agent';
+  return 'human';
+}
+
+export function actorLabel(type: ActorType, via?: string | null): { label: string; color: string; icon: string } {
+  switch (type) {
+    case 'ai': return { label: via ? `AI · ${via}` : 'AI assistant', color: '#8b5cf6', icon: '🤖' };
+    case 'agent': return { label: 'Panel agent', color: '#06b6d4', icon: '🔌' };
+    case 'system': return { label: 'System', color: '#71717a', icon: '⚙️' };
+    default: return { label: 'Human', color: '#16a34a', icon: '👤' };
+  }
+}

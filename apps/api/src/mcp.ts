@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { RpcError, rpc } from './agentRpc.js';
-import { audit, pool } from './db.js';
+import { audit, pool, requestContext, type AuditContext } from './db.js';
 import { agents } from './registry.js';
 import { baseUrl } from './oauth.js';
 import { authenticateToken, type TokenAuth } from './tokens.js';
@@ -44,6 +44,36 @@ const serverRef = z.string().trim().min(1).max(100);
 interface ServerRow { id: string; name: string; provider: string; status: string; region: string | null; os: string | null; plan: object; ip: string | null; last_seen_ip: string | null; suspended_at: string | null; reinstall_started_at: string | null }
 
 const SERVER_COLS = `id, name, provider, status, region, os, plan, host(ip) as ip, host(last_seen_ip) as last_seen_ip, suspended_at, reinstall_started_at`;
+
+/** Best-effort server id for failure audits: never throws, so a failed attempt is still logged. */
+async function bestEffortServerId(auth: TokenAuth, ref: unknown): Promise<string | null> {
+  if (typeof ref !== 'string' || !ref) return null;
+  try {
+    return (await resolveServer(auth, ref)).id;
+  } catch {
+    return null;
+  }
+}
+
+/** Meta that is safe to store for a failed tool call. Never includes file content or other secrets. */
+function safeFailureMeta(name: string, args: any): Record<string, unknown> {
+  if (!args || typeof args !== 'object') return {};
+  const str = (v: unknown, n: number) => (typeof v === 'string' && v ? v.slice(0, n) : undefined);
+  const out: Record<string, unknown> = {};
+  const set = (k: string, v: unknown) => { if (v !== undefined) out[k] = v; };
+  switch (name) {
+    case 'run_command': set('command', str(args.command, 2000)); break;
+    case 'write_file':
+      set('path', str(args.path, 4096));
+      if (typeof args.content === 'string') out.bytes = Buffer.byteLength(args.content);
+      break;
+    case 'restart_service': set('service', str(args.service, 100)); set('action', str(args.action, 20)); break;
+    case 'view_logs': set('source', str(args.source, 100)); break;
+    case 'list_files': case 'read_file': set('path', str(args.path, 4096)); break;
+    default: break;
+  }
+  return out;
+}
 
 async function resolveServer(auth: TokenAuth, ref: string): Promise<ServerRow> {
   const { rows } = await pool.query(
@@ -224,7 +254,7 @@ const TOOLS: ToolDef[] = [
       const s = await resolveServer(auth, a.server);
       requireOnline(s);
       const entries = await fsRpc<Array<{ name: string; type: string; size: number; modTime: string }>>(s.id, 'fs.list', { path: a.path });
-      return { serverId: s.id, text: json({ path: a.path, count: entries.length, entries }) };
+      return { serverId: s.id, audit: { path: a.path, count: entries.length }, text: json({ path: a.path, count: entries.length, entries }) };
     },
   },
   {
@@ -285,7 +315,7 @@ const TOOLS: ToolDef[] = [
       const r = await execOnServer(s.id, a.command, timeoutMs);
       return {
         serverId: s.id,
-        audit: { command: a.command.slice(0, 500), exitCode: r.code },
+        audit: { command: a.command.slice(0, 2000), exitCode: r.code },
         text: `Command on "${s.name}" exited ${r.code}:\n\n${r.out.trim() || '(no output)'}`,
       };
     },
@@ -362,7 +392,7 @@ const TOOLS: ToolDef[] = [
 const rpcError = (id: unknown, code: number, message: string) => ({ jsonrpc: '2.0', id: id ?? null, error: { code, message } });
 const rpcResult = (id: unknown, result: unknown) => ({ jsonrpc: '2.0', id, result });
 
-async function handleMessage(msg: any, auth: TokenAuth): Promise<object | null> {
+async function handleMessage(msg: any, auth: TokenAuth, ctx: AuditContext): Promise<object | null> {
   if (!msg || typeof msg !== 'object' || msg.jsonrpc !== '2.0' || typeof msg.method !== 'string') return rpcError(msg?.id, -32600, 'Invalid request');
   const isNotification = msg.id === undefined || msg.id === null;
   if (isNotification) return null; // notifications/initialized, notifications/cancelled, ...
@@ -399,10 +429,15 @@ async function handleMessage(msg: any, auth: TokenAuth): Promise<object | null> 
       }
       try {
         const out = await tool.run(auth, parsed.data);
-        if (out.serverId) await audit(auth.clientId, out.serverId, `mcp.${tool.name}`, out.audit ?? {}, auth.name).catch(() => {});
+        if (out.serverId) await audit(auth.clientId, out.serverId, `mcp.${tool.name}`, out.audit ?? {}, auth.name, ctx).catch(() => {});
         return rpcResult(msg.id, { content: [{ type: 'text', text: out.text }] });
       } catch (e) {
-        if (e instanceof ToolError) return rpcResult(msg.id, { isError: true, content: [{ type: 'text', text: e.message }] });
+        if (e instanceof ToolError) {
+          // a failed attempt is still an action: log what was tried (safe meta only, never file content)
+          const sid = await bestEffortServerId(auth, (msg.params?.arguments as any)?.server).catch(() => null);
+          await audit(auth.clientId, sid, `mcp.${tool.name}`, { ...safeFailureMeta(tool.name, msg.params?.arguments), error: e.message.slice(0, 300) }, auth.name, ctx).catch(() => {});
+          return rpcResult(msg.id, { isError: true, content: [{ type: 'text', text: e.message }] });
+        }
         console.error('mcp tool failed', tool.name, e);
         return rpcResult(msg.id, { isError: true, content: [{ type: 'text', text: 'The panel hit an unexpected error. Try again in a moment.' }] });
       }
@@ -420,13 +455,14 @@ export function registerMcp(app: FastifyInstance) {
     }
     const body = req.body as unknown;
     if (body === undefined || body === null || typeof body !== 'object') return reply.code(400).send(rpcError(null, -32700, 'Parse error'));
+    const ctx = requestContext(req);
     if (Array.isArray(body)) {
       if (body.length === 0 || body.length > 20) return reply.code(400).send(rpcError(null, -32600, 'Batch must contain 1 to 20 messages'));
-      const out = (await Promise.all(body.map((m) => handleMessage(m, auth)))).filter((r): r is object => r !== null);
+      const out = (await Promise.all(body.map((m) => handleMessage(m, auth, ctx)))).filter((r): r is object => r !== null);
       if (out.length === 0) return reply.code(202).send();
       return out;
     }
-    const res = await handleMessage(body, auth);
+    const res = await handleMessage(body, auth, ctx);
     if (res === null) return reply.code(202).send();
     return res;
   });

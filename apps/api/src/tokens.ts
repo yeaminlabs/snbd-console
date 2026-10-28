@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { audit, pool, sha256 } from './db.js';
+import { audit, pool, sha256, requestContext } from './db.js';
 import { FailureLimiter } from './hardening.js';
 import { clientFromRequest } from './session.js';
 
@@ -190,29 +190,9 @@ export function registerTokens(app: FastifyInstance) {
        values ($1, $2, $3, $4, $5, $6, case when $7::int is null then null else now() + make_interval(days => $7::int) end) returning id, expires_at as "expiresAt"`,
       [client.id, body.data.name, sha256(token), token.slice(0, 12), body.data.scope, serverIds, body.data.expiresInDays],
     );
-    await audit(client.id, null, 'token.create', { name: body.data.name, scope: body.data.scope });
+    await audit(client.id, null, 'token.create', { name: body.data.name, scope: body.data.scope }, null, requestContext(req));
     reply.header('cache-control', 'no-store');
     return { id: rows[0].id, token, expiresAt: rows[0].expiresAt }; // the only time the token is shown
-  });
-
-  /** Creates a short-lived deploy-scoped token for the AI chat session, restricted to one server. */
-  app.post<{ Params: { id: string } }>('/api/servers/:id/ai-session', async (req, reply) => {
-    const client = await clientFromRequest(req);
-    if (!client) return reply.code(401).send({ error: 'Not signed in' });
-    if (!z.string().uuid().safeParse(req.params.id).success) return reply.code(404).send({ error: 'Not found' });
-    const { rows: serverRows } = await pool.query(
-      'select id from servers where id = $1 and client_id = $2 and terminated_at is null',
-      [req.params.id, client.id],
-    );
-    if (serverRows.length === 0) return reply.code(404).send({ error: 'Server not found' });
-    const token = TOKEN_PREFIX + randomBytes(32).toString('base64url');
-    await pool.query(
-      `insert into api_tokens (client_id, name, token_hash, token_prefix, scope, server_ids, expires_at)
-       values ($1, 'AI session', $2, $3, 'deploy', $4::uuid[], now() + interval '24 hours')`,
-      [client.id, sha256(token), token.slice(0, 12), [req.params.id]],
-    );
-    reply.header('cache-control', 'no-store');
-    return { token };
   });
 
   app.delete<{ Params: { id: string } }>('/api/tokens/:id', async (req, reply) => {
@@ -222,7 +202,7 @@ export function registerTokens(app: FastifyInstance) {
     let { rows } = await pool.query('update api_tokens set revoked_at = now() where id = $1 and client_id = $2 and revoked_at is null returning name', [req.params.id, client.id]);
     if (!rows[0]) ({ rows } = await pool.query('update oauth_grants set revoked_at = now() where id = $1 and user_client_id = $2 and revoked_at is null returning name', [req.params.id, client.id]));
     if (!rows[0]) return reply.code(404).send({ error: 'Not found' });
-    await audit(client.id, null, 'token.revoke', { name: rows[0].name });
+    await audit(client.id, null, 'token.revoke', { name: rows[0].name }, null, requestContext(req));
     return { ok: true };
   });
 }

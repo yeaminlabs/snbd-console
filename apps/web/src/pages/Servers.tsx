@@ -3,7 +3,7 @@ import { api, type ActivityItem, type ImportResult, type Server, type VpsPlan } 
 import { IconArrowUpRight, IconChevronRight, IconCopy } from '../components/Icons';
 import { Badge } from '../components/Badge';
 import { Modal } from '../components/Modal';
-import { planLabel, sourceLabel, statusOf, secondaryStatus, joinList, ago } from '../format';
+import { actorLabel, actorType, planLabel, sourceLabel, statusOf, secondaryStatus, joinList, ago, parseDevice } from '../format';
 
 const activityLabel: Record<string, string> = {
   'server.import': 'Server added',
@@ -88,6 +88,63 @@ function OrderModal({ onClose, plans }: { onClose: () => void; plans: VpsPlan[] 
   );
 }
 
+const STATUS_META: Record<string, { icon: string; color: string; bg: string }> = {
+  running: { icon: '●', color: '#166534', bg: '#dcfce7' },
+  provisioning: { icon: '◐', color: '#92400e', bg: '#fef3c7' },
+  agent_offline: { icon: '○', color: '#991b1b', bg: '#fee2e2' },
+  stopped: { icon: '●', color: '#52525b', bg: '#e4e4e7' },
+  unknown: { icon: '?', color: '#52525b', bg: '#f4f4f5' },
+};
+
+function StatCard({ label, value, sub, accent, icon }: { label: string; value: string | number; sub?: string; accent: string; icon: React.ReactNode }) {
+  return (
+    <div className="srv-stat" style={{ ['--accent' as any]: accent }}>
+      <div className="srv-stat-accent" />
+      <div className="srv-stat-head">
+        <span className="srv-stat-icon">{icon}</span>
+        <span className="th">{label}</span>
+      </div>
+      <div className="srv-stat-value">{value}</div>
+      {sub && <div className="srv-stat-sub muted">{sub}</div>}
+    </div>
+  );
+}
+
+function ServerRow({ s }: { s: Server }) {
+  const [label, cls] = statusOf(s);
+  const [src, srcCls] = sourceLabel(s);
+  const secondary = secondaryStatus(s);
+  const cpu = Math.round(s.cpu ?? 0);
+  const meta = STATUS_META[s.status === 'running' && s.agentConnected === false ? 'agent_offline' : s.status === 'running' && s.status === 'running' ? 'running' : s.status] || STATUS_META.unknown;
+
+  return (
+    <a className="srv-row" href={`#/servers/${s.id}`}>
+      <div className="srv-row-main">
+        <span className="srv-status-dot" style={{ background: meta.color, boxShadow: `0 0 0 3px ${meta.bg}` }} aria-hidden="true" />
+        <div className="srv-row-id">
+          <div className="srv-name">{s.name}</div>
+          <div className="srv-ip mono muted">{s.ip ?? 'no IP yet'}</div>
+        </div>
+      </div>
+      <div className="srv-row-tags">
+        <Badge cls={srcCls}>{src}</Badge>
+        <Badge cls={cls}>{label}</Badge>
+        {secondary && <span className="srv-secondary">{secondary[0]}</span>}
+      </div>
+      <div className="srv-row-specs muted">
+        <span>{planLabel(s.plan)}</span>
+        <span aria-hidden="true">·</span>
+        <span>{s.os ?? '—'}</span>
+      </div>
+      <div className="srv-row-cpu">
+        <div className="srv-cpu-bar"><div style={{ width: `${Math.min(100, cpu)}%`, background: cpu >= 80 ? 'var(--red)' : cpu >= 50 ? 'var(--warn-dot)' : 'var(--ok-dot)' }} /></div>
+        <span className="srv-cpu-label muted">{s.cpu == null ? '—' : `${cpu}%`}</span>
+        <IconChevronRight className="srv-chev" />
+      </div>
+    </a>
+  );
+}
+
 export function Servers() {
   const [servers, setServers] = useState<Server[] | null>(null);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
@@ -108,21 +165,26 @@ export function Servers() {
   }, []);
 
   const count = (st: Server['status']) => servers?.filter((s) => s.status === st && !s.suspended_at).length ?? 0;
+  const running = count('running');
+  const provisioning = count('provisioning');
+  const offline = count('agent_offline');
   const vcpu = servers?.reduce((n, s) => n + (s.plan.vcpu ?? 0), 0) ?? 0;
   const ram = servers?.reduce((n, s) => n + (s.plan.ramGb ?? 0), 0) ?? 0;
   const sources = [...new Set(servers?.map((s) => sourceLabel(s)[0].split(' · ')[0]))].sort();
 
   return (
     <>
-      <div className="head-row" style={{ alignItems: 'flex-end' }}>
+      <div className="srv-hero">
         <div>
-          <h1>Servers</h1>
-          <div className="muted" style={{ marginTop: 4 }}>
+          <h1 style={{ margin: 0 }}>Servers</h1>
+          <div className="muted" style={{ marginTop: 6, fontSize: 15 }}>
             {servers ? `${servers.length} ${servers.length === 1 ? 'server' : 'servers'}${sources.length ? ' across ' + joinList(sources) : ''}` : 'Loading…'}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          {plans.length > 0 && <button className="btn" onClick={() => setOrdering(true)}>Order a new VPS</button>}
+        <div className="srv-actions">
+          {plans.length > 0 && (
+            <button className="btn" onClick={() => setOrdering(true)}>Order a new VPS</button>
+          )}
           <button className="btn p" onClick={() => setConnecting(true)}>Connect existing VPS</button>
         </div>
       </div>
@@ -130,79 +192,109 @@ export function Servers() {
       {connecting && <ConnectModal onClose={() => setConnecting(false)} onCreated={load} />}
       {ordering && <OrderModal onClose={() => setOrdering(false)} plans={plans} />}
 
-      <div className="stats">
-        <div className="card pad"><div className="th">Running</div><div className="stat">{count('running')}</div></div>
-        <div className="card pad"><div className="th">Provisioning</div><div className="stat">{count('provisioning')}</div></div>
-        <div className="card pad"><div className="th">Agent offline</div><div className="stat">{count('agent_offline')}</div></div>
-        <div className="card pad"><div className="th">Total vCPU / RAM</div><div className="stat">{vcpu} <span className="muted" style={{ fontSize: 16 }}>/ {ram} GB</span></div></div>
+      <div className="srv-stats">
+        <StatCard
+          label="Running"
+          value={running}
+          sub={running > 0 ? 'healthy' : 'no active servers'}
+          accent="#16a34a"
+          icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></svg>}
+        />
+        <StatCard
+          label="Provisioning"
+          value={provisioning}
+          sub={provisioning > 0 ? 'in progress' : 'none queued'}
+          accent="#d97706"
+          icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>}
+        />
+        <StatCard
+          label="Agent offline"
+          value={offline}
+          sub={offline > 0 ? 'needs attention' : 'all agents online'}
+          accent="#dc2626"
+          icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>}
+        />
+        <StatCard
+          label="Total vCPU / RAM"
+          value={vcpu}
+          sub={`/ ${ram} GB`}
+          accent="#2563eb"
+          icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"/></svg>}
+        />
       </div>
 
-      <div className="cols">
-        <div className="card grow-lg" style={{ overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <div style={{ minWidth: 860 }}>
-              <div className="srow th" style={{ borderTop: 0 }}><div>Server</div><div>Source</div><div>Plan</div><div>System</div><div>Status</div><div>CPU</div></div>
-              {servers === null && [0, 1, 2].map((i) => (
-                <div className="srow" key={i} aria-hidden="true">
-                  <div className="skeleton skeleton-line" style={{ height: 14 }} />
-                  <div className="skeleton skeleton-line" style={{ width: '60%', height: 20, borderRadius: 999 }} />
-                  <div className="skeleton skeleton-line" style={{ width: '50%', height: 14 }} />
-                  <div className="skeleton skeleton-line" style={{ width: '70%', height: 14 }} />
-                  <div className="skeleton skeleton-line" style={{ width: '50%', height: 20, borderRadius: 999 }} />
-                  <div className="skeleton skeleton-line" style={{ width: '80%', height: 6 }} />
+      <div className="cols" style={{ alignItems: 'stretch' }}>
+        <div className="main-col">
+          <section className="card" style={{ overflow: 'hidden', height: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--line)' }}>
+              <h2 className="card-title" style={{ margin: 0 }}>Your servers</h2>
+              <span className="muted" style={{ fontSize: 12 }}>{servers?.length ?? 0} total</span>
+            </div>
+            {servers === null && (
+              <div style={{ padding: 20 }}>
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="srv-row" style={{ opacity: .6, pointerEvents: 'none' }}>
+                    <div className="srv-row-main"><span className="srv-status-dot" style={{ background: 'var(--line)' }} /><div style={{ width: 120 }}><div className="skeleton skeleton-line" style={{ height: 14 }} /></div></div>
+                    <div className="srv-row-tags"><div className="skeleton skeleton-line" style={{ width: 70, height: 20, borderRadius: 999 }} /></div>
+                    <div className="srv-row-specs"><div className="skeleton skeleton-line" style={{ width: 120 }} /></div>
+                    <div className="srv-row-cpu"><div className="skeleton skeleton-line" style={{ width: 80, height: 6 }} /></div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {servers?.map((s) => <ServerRow key={s.id} s={s} />)}
+            {servers?.length === 0 && (
+              <div className="empty-state" style={{ height: 'auto', padding: '48px 20px', margin: 0, border: 0 }}>
+                <div style={{ fontSize: 48 }}>🖥️</div>
+                <b style={{ fontSize: 17 }}>No servers yet</b>
+                <span>Order a new VPS or connect one you already have.</span>
+                <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                  {plans.length > 0 && <button className="btn" onClick={() => setOrdering(true)}>Order a new VPS</button>}
+                  <button className="btn p" onClick={() => setConnecting(true)}>Connect existing VPS</button>
                 </div>
-              ))}
-              {servers?.map((s) => {
-                const [label, cls] = statusOf(s);
-                const [src, srcCls] = sourceLabel(s);
-                const secondary = secondaryStatus(s);
-                const cpu = Math.round(s.cpu ?? 0);
+              </div>
+            )}
+          </section>
+        </div>
+
+        <div className="side-col" style={{ flex: '0 0 320px' }}>
+          <section className="card pad" aria-labelledby="act-h">
+            <h2 id="act-h" className="card-title" style={{ marginBottom: 14 }}>Recent activity</h2>
+            {activity.length === 0 && <p className="muted" style={{ margin: 0 }}>Nothing yet.</p>}
+            <div className="srv-activity">
+              {activity.map((a) => {
+                const type = actorType(a.action, false);
+                const { label, color, icon } = actorLabel(type, a.via);
+                const device = parseDevice(a.user_agent);
                 return (
-                  <a className="srow" key={s.id} href={`#/servers/${s.id}`}>
-                    <div>
-                      <div className="name">{s.name}</div>
-                      <div className="mono muted" style={{ fontSize: 12 }}>{s.ip ?? 'no IP yet'}</div>
-                    </div>
-                    <div><Badge cls={srcCls}>{src}</Badge></div>
-                    <div className="muted">{planLabel(s.plan)}</div>
-                    <div className="muted">{s.os ?? '—'}</div>
-                    <div>
-                      <Badge cls={cls}>{label}</Badge>
-                      {secondary && <div className="muted" style={{ fontSize: 11, marginTop: 3 }}>{secondary[0]}</div>}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-                        <div className="bar"><div style={{ width: `${cpu}%` }} /></div>
-                        <span className="muted" style={{ fontSize: 12, width: 32 }}>{s.cpu == null ? '—' : `${cpu}%`}</span>
+                  <div key={a.id} className="srv-activity-item">
+                    <span className="srv-activity-dot" style={{ background: color, boxShadow: `0 0 0 3px ${color}20` }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <div style={{ fontWeight: 600, fontSize: 13.5 }}>{activityLabel[a.action] ?? a.action}</div>
+                        <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 999, background: color + '12', color, fontWeight: 700 }}>{icon} {label}</span>
                       </div>
-                      <IconChevronRight className="chev" />
+                      <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
+                        {a.server} · {ago(a.at)}
+                        {a.ip_address && <span> · {a.ip_address}</span>}
+                        {device.name !== 'Unknown' && <span> · {device.name}</span>}
+                      </div>
                     </div>
-                  </a>
+                  </div>
                 );
               })}
             </div>
-          </div>
-          {servers?.length === 0 && (
-            <div className="empty-state" style={{ height: 'auto', padding: '32px 20px', margin: 0, border: 0 }}>
-              <b>No servers yet</b>
-              <span>Order a new VPS or connect one you already have.</span>
-              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                {plans.length > 0 && <button className="btn" onClick={() => setOrdering(true)}>Order a new VPS</button>}
-                <button className="btn p" onClick={() => setConnecting(true)}>Connect existing VPS</button>
-              </div>
+          </section>
+
+          <section className="card pad" style={{ background: 'linear-gradient(135deg, #18181b 0%, #2a0b12 100%)', color: '#fff', borderColor: 'transparent' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <span style={{ fontSize: 20 }}>🤖</span>
+              <b style={{ fontSize: 15 }}>MCP server</b>
             </div>
-          )}
-        </div>
-        <div className="side-col">
-          <section className="card pad" aria-labelledby="act-h">
-            <h2 id="act-h" className="card-title" style={{ marginBottom: 12 }}>Recent activity</h2>
-            {activity.length === 0 && <p className="muted" style={{ margin: 0 }}>Nothing yet.</p>}
-            {activity.map((a) => (
-              <div key={a.id} style={{ padding: '10px 0', borderTop: '1px solid #f4f4f5' }}>
-                <div style={{ fontWeight: 500 }}>{activityLabel[a.action] ?? a.action}</div>
-                <div className="muted" style={{ fontSize: 12 }}>{a.server} · {ago(a.at)}</div>
-              </div>
-            ))}
+            <p style={{ margin: 0, fontSize: 13, color: 'rgba(255,255,255,.75)', lineHeight: 1.5 }}>
+              Connect Claude Code, OpenCode or Cursor to manage servers with natural language.
+            </p>
+            <a href="#/agents" className="btn p" style={{ width: '100%', marginTop: 14, background: '#fff', color: 'var(--red-dark)', borderColor: '#fff' }}>Connect an AI client →</a>
           </section>
         </div>
       </div>

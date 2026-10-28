@@ -33,7 +33,7 @@ export interface OsImage { image: string; name: string; ver: string; brand: stri
 export interface FileEntry { name: string; type: 'dir' | 'file' | 'other'; link?: boolean; size: number; mode: string; mtime: number }
 export interface AppInfo { id: string; name: string; tag: string; desc: string; installed: boolean | null }
 export interface JobState { status: 'queued' | 'running' | 'done' | 'failed'; app: string; offset: number; log: string; pct: number; step: string }
-export interface AuditItem { id: number; action: string; at: string; meta: Record<string, any>; system: boolean; via: string | null; serverId: string; server: string }
+export interface AuditItem { id: number; action: string; at: string; meta: Record<string, any>; system: boolean; via: string | null; serverId: string; server: string; ip_address: string | null; user_agent: string | null; location: string | null }
 export interface OAuthRequestInfo { clientName: string; returnsTo: string; servers: { id: string; name: string }[]; access: string }
 export interface TokenInfo { kind: 'token' | 'connector'; id: string; name: string; prefix: string; scope: 'read' | 'deploy'; serverIds: string[] | null; serverNames: string[]; expiresAt: string | null; lastUsedAt: string | null; createdAt: string }
 export interface McpConnection {
@@ -55,7 +55,7 @@ export interface McpConnection {
   connected: boolean;
 }
 export interface McpInfo { url: string; connections: McpConnection[]; connectedCount: number }
-export interface ActivityItem { id: number; action: string; at: string; server: string }
+export interface ActivityItem { id: number; action: string; at: string; server: string; ip_address: string | null; user_agent: string | null; location: string | null; via: string | null }
 export interface ImportResult { serverId: string; token: string; expiresInMinutes: number; panelUrl: string }
 export interface VpsPlan { id: number; name: string; description: string; price: string | null; cycle: string | null; orderUrl: string }
 export interface SshKey {
@@ -116,5 +116,4 @@ export const api = {
   deleteKey: (id: string) => fetch(`/api/keys/${id}`, { method: 'DELETE' }).then(json<{ ok: true }>),
   installKey: (id: string, serverIds: string[]) => post(`/api/keys/${id}/install`, { serverIds }).then(json<{ ok: true }>),
   uninstallKey: (id: string, serverIds: string[]) => post(`/api/keys/${id}/uninstall`, { serverIds }).then(json<{ ok: true }>),
-  aiSession: (serverId: string) => post(`/api/servers/${serverId}/ai-session`, {}).then(json<{ token: string }>),
 };

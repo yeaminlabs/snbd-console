@@ -1,8 +1,61 @@
 import pg from 'pg';
+import type { FastifyRequest } from 'fastify';
 import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 
 const scrypt = promisify(scryptCb) as (pw: string, salt: Buffer, len: number) => Promise<Buffer>;
+
+export interface AuditContext {
+  ip?: string;
+  userAgent?: string;
+  location?: string;
+}
+
+function isPrivateIP(ip?: string): boolean {
+  if (!ip) return false;
+  if (ip === '127.0.0.1' || ip === '::1' || ip === 'localhost') return true;
+  if (ip.startsWith('10.') || ip.startsWith('192.168.') || ip.startsWith('172.')) {
+    const second = Number(ip.split('.')[1]);
+    if (ip.startsWith('172.') && (second < 16 || second > 31)) return false;
+    return true;
+  }
+  return false;
+}
+
+export function formatLocation(ip?: string): string {
+  if (!ip) return 'Unknown';
+  if (isPrivateIP(ip)) return 'Local network';
+  return 'Remote';
+}
+
+export function parseDevice(ua?: string): { name: string; os: string; browser: string } {
+  if (!ua) return { name: 'Unknown', os: 'Unknown', browser: 'Unknown' };
+  const os = /Windows NT 10/.test(ua) ? 'Windows 10/11'
+    : /Windows NT/.test(ua) ? 'Windows'
+    : /Mac OS X|macOS/.test(ua) ? 'macOS'
+    : /Linux/.test(ua) ? 'Linux'
+    : /Android/.test(ua) ? 'Android'
+    : /iPhone|iPad|iPod/.test(ua) ? 'iOS'
+    : 'Unknown';
+  const browser = /Edg\//.test(ua) ? 'Edge'
+    : /Chrome\//.test(ua) ? 'Chrome'
+    : /Safari\//.test(ua) && /Version\//.test(ua) ? 'Safari'
+    : /Firefox\//.test(ua) ? 'Firefox'
+    : /curl|wget|httpie|python-requests|node-fetch|undici/.test(ua) ? 'CLI / Script'
+    : 'Browser';
+  const name = browser === 'CLI / Script' ? `${os} · CLI` : `${os} · ${browser}`;
+  return { name, os, browser };
+}
+
+export function requestContext(req: FastifyRequest): AuditContext {
+  const ip = req.ip;
+  const userAgent = String(req.headers['user-agent'] ?? '');
+  return {
+    ip,
+    userAgent,
+    location: formatLocation(ip),
+  };
+}
 
 export const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -37,6 +90,9 @@ export async function verifyPassword(pw: string, stored: string): Promise<boolea
   return timingSafeEqual(actual, expected);
 }
 
-export async function audit(clientId: string | null, serverId: string | null, action: string, meta: object = {}, via: string | null = null) {
-  await pool.query('insert into audit_log (client_id, server_id, action, meta, via) values ($1, $2, $3, $4, $5)', [clientId, serverId, action, meta, via]);
+export async function audit(clientId: string | null, serverId: string | null, action: string, meta: object = {}, via: string | null = null, ctx: AuditContext = {}) {
+  await pool.query(
+    'insert into audit_log (client_id, server_id, action, meta, via, ip_address, user_agent, location) values ($1, $2, $3, $4, $5, $6, $7, $8)',
+    [clientId, serverId, action, meta, via, ctx.ip ?? null, ctx.userAgent ?? null, ctx.location ?? null],
+  );
 }

@@ -56,9 +56,6 @@ the IP when sources disagree, do not paste secrets from logs, confirm before des
 - **Origin check:** browser requests from another site are refused (MCP clients send no Origin).
 - **Revocation:** disconnecting a client or revoking a token takes effect on the next request.
 
-The panel's own AI chat uses a short-lived `AI session` token. It is not shown as an MCP connection and is separate from the customer's
-connections.
-
 ## OAuth details (for operators)
 OAuth 2.1 authorization code with **PKCE (S256 only)**, public clients, dynamic client registration (RFC 7591), discovery
 (`/.well-known/oauth-protected-resource`, `/.well-known/oauth-authorization-server`), token refresh with rotation, and revocation (RFC 7009).

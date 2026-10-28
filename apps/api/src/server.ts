@@ -7,7 +7,7 @@ import { agents, type AgentConn } from './registry.js';
 import { registerWhmcs } from './whmcs.js';
 import { z } from 'zod';
 import { AgentMessage, BrowserTermMessage } from '@snbd/proto';
-import { audit, pool, randomToken, sha256, verifyPassword } from './db.js';
+import { audit, pool, randomToken, sha256, verifyPassword, requestContext } from './db.js';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import fastifyStatic from '@fastify/static';
@@ -94,6 +94,7 @@ app.post('/api/login', ipLimit(20), async (req, reply) => {
   if (!client || !ok) { loginFails.fail(failKey); return reply.code(401).send({ error: 'Wrong email or password' }); }
   loginFails.clear(failKey);
   await startSession(reply, client.id);
+  await audit(client.id, null, 'login', { email: client.email }, null, requestContext(req));
   return { id: client.id, name: client.name, email: client.email };
 });
 
@@ -187,7 +188,7 @@ app.delete<{ Params: { id: string } }>('/api/servers/:id', async (req, reply) =>
   await pool.query('delete from agent_keys where server_id = $1', [req.params.id]);
   await pool.query('delete from enroll_tokens where server_id = $1', [req.params.id]);
   await pool.query(`update servers set terminated_at = now(), status = 'stopped', suspended_at = null where id = $1`, [req.params.id]);
-  await audit(client.id, req.params.id, 'server.removed');
+  await audit(client.id, req.params.id, 'server.removed', {}, null, requestContext(req));
   return { ok: true };
 });
 
@@ -220,7 +221,8 @@ app.get<{ Querystring: { server?: string; before?: string; limit?: string } }>('
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
   const before = Number(req.query.before) || null;
   const { rows } = await pool.query(
-    `select a.id, a.action, a.at, a.meta, a.client_id is null as system, a.via, s.id as "serverId", coalesce(s.name, 'Account') as server
+    `select a.id, a.action, a.at, a.meta, a.client_id is null as system, a.via, a.ip_address, a.user_agent, a.location,
+        s.id as "serverId", coalesce(s.name, 'Account') as server
      from audit_log a left join servers s on s.id = a.server_id
      where (s.client_id = $1 or (s.id is null and a.client_id = $1)) and ($2::uuid is null or s.id = $2) and ($3::bigint is null or a.id < $3)
      order by a.id desc limit $4`,
@@ -234,7 +236,7 @@ app.get('/api/activity', async (req, reply) => {
   const client = await clientFromRequest(req);
   if (!client) return reply.code(401).send({ error: 'Not signed in' });
   const { rows } = await pool.query(
-    `select a.id, a.action, a.at, s.name as server
+    `select a.id, a.action, a.at, a.ip_address, a.user_agent, a.location, a.via, s.name as server
      from audit_log a join servers s on s.id = a.server_id
      where s.client_id = $1 and a.action in ('server.import', 'agent.connected', 'terminal.open')
      order by a.at desc limit 6`,
@@ -252,7 +254,7 @@ app.post('/api/servers/import', async (req, reply) => {
   const { rows } = await pool.query(`insert into servers (client_id, name, provider, status) values ($1, $2, 'imported', 'provisioning') returning id`, [client.id, body.data.name]);
   const token = randomToken(24);
   await pool.query(`insert into enroll_tokens (server_id, token_hash, expires_at) values ($1, $2, now() + interval '30 minutes')`, [rows[0].id, sha256(token)]);
-  await audit(client.id, rows[0].id, 'server.import');
+  await audit(client.id, rows[0].id, 'server.import', {}, null, requestContext(req));
   return { serverId: rows[0].id, token, expiresInMinutes: 30, panelUrl: process.env.PUBLIC_PANEL_URL ?? '' };
 });
 
@@ -468,8 +470,9 @@ app.get<{ Params: { id: string } }>('/ws/terminal/:id', { websocket: true }, asy
   if (!agent) return socket.close(4404, 'agent offline');
 
   const sid = randomUUID();
+  const termCtx = requestContext(req);
   agent.terminals.set(sid, socket);
-  await audit(client.id, serverId, 'terminal.open', { sid });
+  await audit(client.id, serverId, 'terminal.open', { sid }, null, termCtx);
   let opened = false;
 
   const handle = (raw: Buffer) => {
@@ -497,7 +500,7 @@ app.get<{ Params: { id: string } }>('/ws/terminal/:id', { websocket: true }, asy
 
   socket.on('close', () => {
     if (agent.terminals.delete(sid)) send(agent.socket, { type: 'term.close', sid });
-    audit(client.id, serverId, 'terminal.close', { sid }).catch(() => {});
+    audit(client.id, serverId, 'terminal.close', { sid }, null, termCtx).catch(() => {});
   });
 });
 

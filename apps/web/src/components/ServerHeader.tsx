@@ -4,7 +4,7 @@ import { Badge } from './Badge';
 import { IconCheckCircle, IconCopy } from './Icons';
 import { ago, planLabel, sourceLabel, statusOf, secondaryStatus } from '../format';
 
-type Tab = 'overview' | 'terminal' | 'files' | 'apps' | 'reinstall' | 'ai';
+type Tab = 'overview' | 'terminal' | 'files' | 'apps' | 'reinstall';
 
 function CopyField({ value }: { value: string }) {
   const [done, setDone] = useState(false);
@@ -111,7 +111,6 @@ export function ServerHeader({ server, tab, onChanged }: { server: Server | null
     ['terminal', 'Terminal', `#/servers/${id}/terminal`],
     ['files', 'Files', `#/servers/${id}/files`],
     ['apps', 'Apps', `#/servers/${id}/apps`],
-    ['ai', 'AI Assistant', `#/servers/${id}/ai`],
     ['reinstall', 'Reinstall', `#/servers/${id}/reinstall`],
   ];
   return (

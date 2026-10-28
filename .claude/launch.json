@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "snbd-api",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@snbd/api", "dev"],
+      "port": 3101
+    },
+    {
+      "name": "snbd-web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@snbd/web", "dev"],
+      "port": 5173
+    }
+  ]
+}

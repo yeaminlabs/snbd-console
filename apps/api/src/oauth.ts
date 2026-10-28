@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { audit, pool, sha256 } from './db.js';
+import { audit, pool, sha256, requestContext } from './db.js';
 import { ipLimit } from './hardening.js';
 import { clientFromRequest } from './session.js';
 import { TOKEN_PREFIX } from './tokens.js';
@@ -184,7 +184,7 @@ export function registerOAuth(app: FastifyInstance) {
       [me.id, r.client_id, `${client.client_name} (connector)`, serverIds, GRANT_TTL_S])).rows[0];
     const code = rand();
     await pool.query(`insert into oauth_codes (code_hash, grant_id, redirect_uri, code_challenge, expires_at) values ($1, $2, $3, $4, now() + make_interval(secs => $5))`, [sha256(code), grant.id, r.redirect_uri, r.code_challenge, CODE_TTL_S]);
-    await audit(me.id, null, 'oauth.approve', { app: client.client_name });
+    await audit(me.id, null, 'oauth.approve', { app: client.client_name }, null, requestContext(req));
     return { redirect: withState(r.redirect_uri, { code }, r.state) };
   });
 

@@ -2,7 +2,7 @@ import { createHash, randomBytes, generateKeyPairSync } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { RpcError, rpc } from './agentRpc.js';
-import { audit, pool } from './db.js';
+import { audit, pool, requestContext } from './db.js';
 import { agents } from './registry.js';
 import { clientFromRequest } from './session.js';
 
@@ -137,7 +137,7 @@ export function registerSshKeys(app: FastifyInstance) {
        values ($1, $2, $3, $4, $5, $6) returning id, name, key_type as "keyType", public_key as "publicKey", fingerprint, private_generated as "privateGenerated"`,
       [client.id, body.data.name, keyType, publicKey, fingerprint, body.data.mode === 'generate'],
     )).rows[0];
-    await audit(client.id, null, body.data.mode === 'generate' ? 'ssh.key.create' : 'ssh.key.import', { name: body.data.name });
+    await audit(client.id, null, body.data.mode === 'generate' ? 'ssh.key.create' : 'ssh.key.import', { name: body.data.name }, null, requestContext(req));
     return { key, privateKey: privateKeyPem }; // private half this one time, only for generated keys
   });
 
@@ -169,7 +169,7 @@ export function registerSshKeys(app: FastifyInstance) {
       }
     }
     await pool.query('delete from ssh_keys where id = $1', [key.id]); // join rows and install record cascade
-    await audit(client.id, null, 'ssh.key.delete', { name: key.name });
+    await audit(client.id, null, 'ssh.key.delete', { name: key.name }, null, requestContext(req));
     return { ok: true, removedFrom: installed.map((s) => s.name) };
   });
 
@@ -197,7 +197,7 @@ export function registerSshKeys(app: FastifyInstance) {
         continue;
       }
       await pool.query('insert into ssh_key_servers (key_id, server_id) values ($1, $2) on conflict do nothing', [key.id, srv.id]);
-      await audit(client.id, srv.id, 'ssh.key.install', { keyName: key.name, keyId: key.id });
+      await audit(client.id, srv.id, 'ssh.key.install', { keyName: key.name, keyId: key.id }, null, requestContext(req));
     }
     if (failed.length) return reply.code(502).send({ error: `Installed where possible; failed on ${failed.join(', ')}.` });
     return { ok: true, installedOn: servers.map((s) => s.name) };
@@ -227,7 +227,7 @@ export function registerSshKeys(app: FastifyInstance) {
         continue;
       }
       await pool.query('delete from ssh_key_servers where key_id = $1 and server_id = $2', [key.id, srv.id]);
-      await audit(client.id, srv.id, 'ssh.key.uninstall', { keyName: key.name, keyId: key.id });
+      await audit(client.id, srv.id, 'ssh.key.uninstall', { keyName: key.name, keyId: key.id }, null, requestContext(req));
     }
     if (failed.length) return reply.code(502).send({ error: `Removed where possible; failed on ${failed.join(', ')}.` });
     return { ok: true };

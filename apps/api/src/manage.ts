@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { startAgentReinstall } from './agentReinstall.js';
 import { RpcError } from './agentRpc.js';
 import { buildUserData } from './cloudinit.js';
-import { audit, pool, randomToken, sha256 } from './db.js';
+import { audit, pool, randomToken, sha256, requestContext } from './db.js';
 import { OS_CATALOG, findOs } from './os.js';
 import { ProviderError, getAdapter, type ProviderServer } from './providers/index.js';
 import { agents } from './registry.js';
@@ -57,7 +57,7 @@ export function registerManage(app: FastifyInstance) {
     }
     if (body.data.action === 'stop') await pool.query("update servers set status = 'stopped' where id = $1", [server.id]);
     if (body.data.action === 'start') await pool.query("update servers set status = 'agent_offline' where id = $1 and status = 'stopped'", [server.id]);
-    await audit(client.id, server.id, `power.${body.data.action}`);
+    await audit(client.id, server.id, `power.${body.data.action}`, {}, null, requestContext(req));
     return { ok: true };
   });
 
@@ -102,7 +102,7 @@ export function registerManage(app: FastifyInstance) {
       req.log.error(err, 'reinstall failed');
       await pool.query('delete from enroll_tokens where server_id = $1 and used_at is null', [server.id]);
       await pool.query('update servers set reinstall_started_at = null where id = $1', [server.id]);
-      await audit(client.id, server.id, 'reinstall.failed', { os: body.data.os });
+      await audit(client.id, server.id, 'reinstall.failed', { os: body.data.os }, null, requestContext(req));
       if (err instanceof RpcError) return reply.code(err.status >= 500 ? 502 : err.status).send({ error: err.message });
       const f = providerFailure(err);
       return reply.code(f.status).send({ error: f.error });
@@ -114,7 +114,7 @@ export function registerManage(app: FastifyInstance) {
     const live = agents.get(server.id);
     for (const t of live?.terminals.values() ?? []) t.close(1001, 'server is being reinstalled');
     live?.socket.close(4006, 'reinstall');
-    await audit(client.id, server.id, 'server.reinstall', { os: body.data.os });
+    await audit(client.id, server.id, 'server.reinstall', { os: body.data.os }, null, requestContext(req));
 
     // shown once and never stored
     reply.header('cache-control', 'no-store');
