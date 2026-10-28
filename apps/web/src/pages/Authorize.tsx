@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type OAuthRequestInfo } from '../api';
+import snbdLogo from '../assets/logo101.png';
 
 export function Authorize({ id }: { id: string }) {
   const [info, setInfo] = useState<OAuthRequestInfo | null>(null);
@@ -22,7 +23,7 @@ export function Authorize({ id }: { id: string }) {
     <main style={{ display: 'grid', placeItems: 'center', minHeight: '100vh', padding: 24 }}>
       <section className="card" style={{ width: '100%', maxWidth: 520, padding: 32 }} aria-labelledby="auth-h">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
-          <img src="/src/assets/logo101.png" alt="SNBD HOST" style={{ height: 80, width: 'auto', display: 'block' }} />
+          <img src={snbdLogo} alt="SNBD HOST" style={{ height: 80, width: 'auto', display: 'block' }} />
         </div>
         {error && <p className="error" role="alert" style={{ marginTop: 16 }}>{error}</p>}
         {!info && !error && <p className="muted">Loading…</p>}

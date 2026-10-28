@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { api, type Me } from '../api';
+import snbdLogo from '../assets/logo101.png';
 
 const isDev = import.meta.env.DEV;
 
@@ -38,7 +39,7 @@ export function Login({ onSignedIn }: { onSignedIn: (m: Me) => void }) {
     <main style={{ display: 'grid', placeItems: 'center', minHeight: '100vh', padding: 24 }}>
       <form className="card" style={{ width: '100%', maxWidth: 400, padding: 32 }} onSubmit={submit}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 28 }}>
-          <img src="/src/assets/logo101.png" alt="SNBD HOST" style={{ height: 80, width: 'auto', display: 'block' }} />
+          <img src={snbdLogo} alt="SNBD HOST" style={{ height: 80, width: 'auto', display: 'block' }} />
         </div>
         <h1 style={{ fontSize: 28, margin: '12px 0 24px' }}>Sign in</h1>
         <div className="field"><label htmlFor="email">Email</label><input id="email" name="email" type="email" autoComplete="username" required /></div>
