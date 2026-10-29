@@ -468,6 +468,11 @@ textarea.input { height: auto; padding: 10px 12px; }
 .mcp-conn:hover { border-color: #d4d4d8; background: #fff; }
 .mcp-conn-top { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; }
 .mcp-avatar { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; flex: 0 0 38px; border-radius: 10px; background: var(--ink); color: #fff; font-size: 14px; font-weight: 700; }
+.mcp-avatar.has-logo { position: relative; background: #fff; border: 1px solid var(--line); overflow: hidden; }
+.mcp-avatar.has-logo img { position: relative; z-index: 1; width: 24px; height: 24px; object-fit: contain; display: block; background: #fff; }
+.mcp-avatar.has-logo .mcp-avatar-fallback { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--ink); color: #fff; font-size: 14px; font-weight: 700; z-index: 0; }
+.mcp-live-list li { display: flex; align-items: center; gap: 8px; }
+.mcp-live-logo { width: 20px; height: 20px; object-fit: contain; border-radius: 5px; background: #fff; flex: 0 0 20px; }
 .mcp-conn[data-kind='claude-code'] .mcp-avatar { background: #b45309; }
 .mcp-conn[data-kind='claude'] .mcp-avatar { background: #c2410c; }
 .mcp-conn[data-kind='opencode'] .mcp-avatar { background: #0f172a; }

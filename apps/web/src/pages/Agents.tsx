@@ -41,10 +41,18 @@ const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ behav
 
 function ConnectionCard({ c, onDisconnect }: { c: McpConnection; onDisconnect: (c: McpConnection) => void }) {
   const machine = [c.os, c.ip].filter(Boolean).join(' · ');
+  const logo = logoForConnection(c);
   return (
     <article className="mcp-conn" data-kind={c.clientKind}>
       <div className="mcp-conn-top">
-        <span className="mcp-avatar" aria-hidden="true">{(c.name || '?').slice(0, 1).toUpperCase()}</span>
+        {logo ? (
+          <span className="mcp-avatar has-logo" aria-hidden="true">
+            <img src={logo} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            <span className="mcp-avatar-fallback">{(c.name || '?').slice(0, 1).toUpperCase()}</span>
+          </span>
+        ) : (
+          <span className="mcp-avatar" aria-hidden="true">{(c.name || '?').slice(0, 1).toUpperCase()}</span>
+        )}
         <div className="mcp-conn-id">
           <div className="mcp-conn-name">
             {c.name}
@@ -87,6 +95,39 @@ const AGENTS = [
   { id: 'openclaw', name: 'OpenClaw', icon: OPENCLAW_LOGO, color: '#06b6d4', desc: 'Open source coding agent', settings: true, useImage: true },
   { id: 'windsurf', name: 'Windsurf', icon: windsurfLogo, color: '#06b6d4', desc: 'Codeium AI IDE', settings: true, useImage: true },
 ];
+
+/** Logo shown in every active connection card, keyed by backend clientKind. */
+const CLIENT_LOGOS: Record<string, string> = {
+  'claude-code': CLAUDE_LOGO,
+  'claude-desktop': CLAUDE_LOGO,
+  'claude': CLAUDE_LOGO,
+  'codex': OPENAI_LOGO,
+  'opencode': OPENCODE_LOGO,
+  'cursor': cursorLogo,
+  'cline': clineLogo,
+  'roo-code': roocodeLogo,
+  'roocode': roocodeLogo,
+  'hermes': HERMES_LOGO,
+  'openclaw': OPENCLAW_LOGO,
+  'windsurf': windsurfLogo,
+};
+
+/** Resolve a connector logo from clientKind, falling back to fuzzy name match so "Claude"/"OpenCode" still show a logo when kind is "other". */
+function logoForConnection(c: Pick<McpConnection, 'clientKind' | 'name'>): string | null {
+  const kind = (c.clientKind || '').toLowerCase().trim();
+  if (CLIENT_LOGOS[kind]) return CLIENT_LOGOS[kind];
+  const n = (c.name || '').toLowerCase();
+  if (n.includes('claude')) return CLAUDE_LOGO;
+  if (n.includes('opencode')) return OPENCODE_LOGO;
+  if (n.includes('codex') || n.includes('openai')) return OPENAI_LOGO;
+  if (n.includes('cursor')) return cursorLogo;
+  if (n.includes('cline')) return clineLogo;
+  if (n.includes('roo')) return roocodeLogo;
+  if (n.includes('hermes')) return HERMES_LOGO;
+  if (n.includes('claw')) return OPENCLAW_LOGO;
+  if (n.includes('windsurf')) return windsurfLogo;
+  return null;
+}
 
 const MASTER_PROMPT = `# SNBD MCP Auto-Connect Prompt
 
@@ -280,12 +321,16 @@ export function Agents() {
           </div>
           {connected.length > 0 ? (
             <ul className="mcp-live-list">
-              {connected.map((c) => (
+              {connected.map((c) => {
+                const logo = logoForConnection(c);
+                return (
                 <li key={c.id}>
+                  {logo && <img src={logo} alt="" loading="lazy" className="mcp-live-logo" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
                   <b>{c.name}</b>
                   <span className="muted">{c.os ?? 'machine unknown'}</span>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           ) : (
             <div className="mcp-live-empty">
