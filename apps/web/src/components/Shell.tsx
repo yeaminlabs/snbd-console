@@ -27,6 +27,10 @@ export function Shell({ me, onSignedOut, children, active = 'servers' }: { me: M
         <a href="#/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', padding: collapsed ? '0 6px' : '0 4px' }}>
           <img src={snbdLogo} alt="SNBD HOST" style={{ height: 44, width: 'auto', display: 'block' }} />
         </a>
+        <a href="https://snbdhost.com/eu-vps" target="_blank" rel="noreferrer" className="header-promo" title="Cheapest EU VPS — from $11.97/mo">
+          <span className="header-promo-price">from $11.97/mo</span>
+          <span className="header-promo-text">Cheapest EU VPS for your next project idea — build without hassle, do it right with SNBD Host →</span>
+        </a>
         <span className="grow" />
         <div className="account" style={{ transition: 'all 0.2s ease' }}>
           <span className="avatar" aria-hidden="true" style={{ background: 'linear-gradient(135deg, var(--red) 0%, #991b1b 100%)', boxShadow: '0 2px 8px rgba(213,12,45,0.3)' }}>{me.name.slice(0, 1).toUpperCase()}</span>

@@ -502,6 +502,13 @@ textarea.input { height: auto; padding: 10px 12px; }
 .side-promo-link { font-size: 12.5px; font-weight: 600; color: #fff; text-decoration: underline; text-underline-offset: 2px; }
 .side-promo-link:hover { color: #fecdd3; }
 
+/* header EU VPS promo — fills the whitespace after the logo */
+.header-promo { display: flex; flex: 1; align-items: center; justify-content: center; gap: 10px; min-width: 0; padding: 7px 14px; border-radius: 999px; background: linear-gradient(100deg, #fff5f6, #fdeced); border: 1px solid #f3c6cc; text-decoration: none; white-space: nowrap; overflow: hidden; }
+.header-promo:hover { border-color: var(--red); background: linear-gradient(100deg, #fff, #fdeced); }
+.header-promo-price { flex: 0 0 auto; padding: 3px 10px; border-radius: 999px; background: var(--red); color: #fff; font-size: 12px; font-weight: 800; }
+.header-promo-text { overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+@media (max-width: 900px) { .header-promo-text { display: none; } .header-promo { flex: 0 0 auto; } }
+
 /* overview promo */
 .mcp-promo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 24px; margin-top: 20px; padding: 18px 22px; border-color: #f3c6cc; background: linear-gradient(100deg, #fff 0%, #fff7f8 100%); }
 .mcp-promo + .cols { margin-top: 16px; }
