@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { api, type Me } from '../api';
-import snbdLogo from '../assets/logo101.png';
+import snbdLogo from '../assets/logo_1000.png';
 
 const isDev = import.meta.env.DEV;
 

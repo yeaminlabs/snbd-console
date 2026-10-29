@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type OAuthRequestInfo } from '../api';
-import snbdLogo from '../assets/logo101.png';
+import snbdLogo from '../assets/logo_1000.png';
 
 export function Authorize({ id }: { id: string }) {
   const [info, setInfo] = useState<OAuthRequestInfo | null>(null);

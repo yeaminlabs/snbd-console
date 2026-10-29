@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { api, type Me } from '../api';
 import { IconBot, IconActivity, IconBackup, IconKey, IconReceipt, IconServers, IconSupport } from './Icons';
-import snbdLogo from '../assets/logo101.png';
+import snbdLogo from '../assets/logo_1000.png';
 
 const soon = (label: string, icon: ReactNode) => (
   <span className="nav-item disabled" aria-disabled="true" title={`${label} — coming soon`}>{icon}<span className="nav-label">{label}</span><span className="soon">Soon</span></span>
