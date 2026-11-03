@@ -472,8 +472,178 @@ export function registerMcp(app: FastifyInstance) {
     return res;
   });
 
-  // no server-initiated stream and no sessions: say so instead of hanging
-  for (const method of ['GET', 'DELETE'] as const) {
-    app.route({ method, url: '/mcp', handler: async (_req, reply) => reply.code(405).header('allow', 'POST').send({ error: 'Use POST' }) });
-  }
+  // no server-initiated stream and no sessions: GET shows info page for browsers
+  app.get('/mcp', async (_req, reply) => {
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SNBD Console - MCP</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --red: #dc2626;
+      --red-deep: #b91c1c;
+      --white: #ffffff;
+      --ink: #111111;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      margin: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      background: radial-gradient(1200px 800px at 50% 0%, #fff1f2 0%, var(--white) 55%);
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    main {
+      min-height: 100%;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .card {
+      width: 100%;
+      max-width: 680px;
+      background: var(--white);
+      border: 2px solid var(--red);
+      border-radius: 12px;
+      box-shadow: 0 30px 60px -40px rgba(185, 28, 28, 0.8), 0 10px 40px -20px rgba(17, 17, 17, 0.4);
+      overflow: hidden;
+      position: relative;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(600px 200px at 50% 0%, rgba(220, 38, 38, 0.08), transparent 70%);
+      pointer-events: none;
+    }
+    .card-inner {
+      position: relative;
+      display: grid;
+      gap: 20px;
+      padding: clamp(28px, 6vw, 56px);
+      text-align: center;
+    }
+    .badge {
+      justify-self: center;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(220, 38, 38, 0.12) 0%, rgba(220, 38, 38, 0.06) 100%);
+      border: 1px solid rgba(220, 38, 38, 0.4);
+      color: var(--red-deep);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.28em;
+      font-weight: 600;
+    }
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--red);
+      box-shadow: 0 0 0 6px rgba(220, 38, 38, 0.12);
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(32px, 8vw, 56px);
+      line-height: 1.02;
+      letter-spacing: -0.02em;
+    }
+    .accent {
+      color: var(--red);
+    }
+    p {
+      margin: 0;
+      font-size: clamp(16px, 2.4vw, 19px);
+      line-height: 1.8;
+      color: rgba(17, 17, 17, 0.82);
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 28px;
+      border-radius: 999px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 15px;
+      transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--red) 0%, var(--red-deep) 100%);
+      color: var(--white);
+      box-shadow: 0 18px 40px -24px rgba(185, 28, 28, 0.9);
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 22px 50px -22px rgba(185, 28, 28, 1);
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--red-deep);
+      border: 1px solid rgba(220, 38, 38, 0.5);
+    }
+    .btn-ghost:hover {
+      transform: translateY(-2px);
+      background: rgba(220, 38, 38, 0.06);
+    }
+    .footer {
+      justify-self: center;
+      font-size: 14px;
+      color: rgba(17, 17, 17, 0.6);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <article class="card">
+      <div class="card-inner">
+        <div class="badge">
+          <span class="badge-dot"></span>
+          SNBD Console
+        </div>
+        <h1>Console is a <span class="accent">tool from SNBD Host</span></h1>
+        <p>
+          If you want to use the SNBD Console MCP, please purchase any VPS from
+          <strong>snbdhost.com</strong>. Connect your purchased VPS to unlock secure,
+          authenticated access to manage your servers from your AI assistant.
+        </p>
+        <div class="actions">
+          <a class="btn btn-primary" href="https://snbdhost.com" target="_blank" rel="noopener noreferrer">
+            Purchase a VPS at snbdhost.com
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M6 3L11 8L6 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </a>
+          <a class="btn btn-ghost" href="https://snbdhost.com/contact" target="_blank" rel="noopener noreferrer">
+            Talk to sales
+          </a>
+        </div>
+        <div class="footer">
+          SNBD Host · Secure VPS hosting for developers
+        </div>
+      </div>
+    </article>
+  </main>
+</body>
+</html>`;
+    reply.type('text/html; charset=utf-8').code(200).send(html);
+  });
+
+  app.delete('/mcp', async (_req, reply) => reply.code(405).header('allow', 'POST').send({ error: 'Use POST' }));
 }
