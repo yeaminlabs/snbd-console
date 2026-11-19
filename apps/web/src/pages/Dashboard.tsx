@@ -12,6 +12,11 @@ const activityLabel: Record<string, string> = {
   'terminal.open': 'Terminal opened',
 };
 
+const formatGb = (value: number | null | undefined) => {
+  if (value == null) return '—';
+  return `${new Intl.NumberFormat('en', { maximumFractionDigits: value < 10 ? 1 : 0 }).format(value)} GB`;
+};
+
 function ConnectModal({ onClose, onCreated, reconnect }: { onClose: () => void; onCreated: () => void; reconnect?: { id: string; name: string } }) {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -231,22 +236,31 @@ export function Dashboard() {
   };
   useEffect(() => {
     load();
-    const t = setInterval(load, 5000);
+    const t = setInterval(load, 15000);
     return () => clearInterval(t);
   }, []);
+
+  const activeServers = (servers ?? []).filter((s) => s.status === 'running' && !s.suspended_at);
+  const shutdownServers = (servers ?? []).filter((s) => s.status === 'stopped' || s.status === 'agent_offline');
+  const selectedId = selected?.id;
 
   useEffect(() => {
     if (!selected && activeServers.length > 0) setSelected(activeServers[0]);
   }, [servers]);
 
   useEffect(() => {
-    if (!selected) { setMetrics(null); return; }
-    api.server(selected.id).then(setSelected).catch(() => {});
-    api.metrics(selected.id).then(setMetrics).catch(() => setMetrics(null));
-  }, [selected]);
-
-  const activeServers = (servers ?? []).filter((s) => s.status === 'running' && !s.suspended_at);
-  const shutdownServers = (servers ?? []).filter((s) => s.status === 'stopped' || s.status === 'agent_offline');
+    if (!selectedId) { setMetrics(null); return; }
+    let cancelled = false;
+    api.server(selectedId).then((fresh) => {
+      if (!cancelled) setSelected((current) => current?.id === fresh.id ? { ...current, ...fresh } : fresh);
+    }).catch(() => {});
+    api.metrics(selectedId).then((next) => {
+      if (!cancelled) setMetrics(next);
+    }).catch(() => {
+      if (!cancelled) setMetrics(null);
+    });
+    return () => { cancelled = true; };
+  }, [selectedId]);
   const latest = metrics?.latest;
   const cpuPoints = metrics?.points.map((p) => p.cpu ?? 0).filter((p): p is number => p != null) || null;
   const ramPct = latest && latest.memTotal ? Math.round((latest.memUsed / latest.memTotal) * 100) : 0;
@@ -270,7 +284,7 @@ export function Dashboard() {
 
   return (
     <>
-      {error && <p className="error">{error}</p>}
+      {error && <p className="error" role="alert">{error.includes('Too many requests') ? 'Live data is temporarily rate-limited; retrying automatically.' : error}</p>}
       {connecting && <ConnectModal onClose={() => setConnecting(false)} onCreated={load} />}
       {reconnecting && <ConnectModal onClose={() => setReconnecting(null)} onCreated={load} reconnect={reconnecting} />}
 
@@ -343,8 +357,8 @@ export function Dashboard() {
                 <div className="dash-info-grid">
                   <StatPill label="OS" value={selected.os ?? '—'} sub="Operating system" icon={<IconServer />} />
                   <StatPill label="CPU" value={selected.plan.vcpu ?? '—'} sub={selected.plan.vcpu ? `${selected.plan.vcpu} core${selected.plan.vcpu > 1 ? 's' : ''}` : ''} icon={<IconCpu />} />
-                  <StatPill label="Memory" value={selected.plan.ramGb != null ? `${selected.plan.ramGb} GB` : '—'} sub="RAM" icon={<IconMemory />} />
-                  <StatPill label="Storage" value={selected.plan.diskGb != null ? `${selected.plan.diskGb} GB` : '—'} sub="Disk" icon={<IconHdd />} />
+                  <StatPill label="Memory" value={formatGb(selected.plan.ramGb)} sub="RAM" icon={<IconMemory />} />
+                  <StatPill label="Storage" value={formatGb(selected.plan.diskGb)} sub="Disk" icon={<IconHdd />} />
                   <StatPill label="IP" value={selected.ip ?? 'no IP'} sub={selected.ip ? 'Public address' : 'Not assigned'} icon={<IconNetwork />} />
                 </div>
                 <div className="dash-info-actions" style={{ display: 'flex', gap: 8, marginTop: 10 }}>
