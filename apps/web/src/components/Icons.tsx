@@ -18,3 +18,16 @@ export const IconFile = icon(<><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h1
 export const IconTerminal = icon(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 9l3 3-3 3M13 15h4" /></>);
 export const IconRestart = icon(<><path d="M20 12a8 8 0 1 1-2.34-5.66" /><path d="M20 4v5h-5" /></>);
 export const IconCheckCircle = icon(<><circle cx="12" cy="12" r="9" /><path d="M8.5 12.5l2.3 2.3L16 10" /></>);
+export const IconReport = icon(<><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="23" cy="21" r="1" /><circle cx="1" cy="21" r="1" /></>);
+export const IconNotifications = icon(<><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></>);
+export const IconSettings = icon(<><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1-1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1-1.51l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82-.33 1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1 1.51l.06.06a2 2 0 0 1 0-2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82.33v.09A1.65 1.65 0 0 0 13 9.4" /></>);
+export const IconHelp = icon(<><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><path d="M12 17h.01" /></>);
+export const IconFinance = icon(<><rect x="1" y="4" width="22" height="16" rx="2" ry="2" /><line x1="1" y1="10" x2="23" y2="10" /><line x1="9" y1="4" x2="9" y2="14" /></>);
+export const IconLayout = icon(<><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></>);
+export const IconStop = icon(<rect x="6" y="6" width="12" height="12" rx="2" />);
+export const IconServer = icon(<><rect x="2" y="3" width="20" height="14" rx="2" ry="2" /><line x1="6" y1="6" x2="6.01" y2="6" /><line x1="6" y1="12" x2="6.01" y2="12" /><line x1="12" y1="6" x2="12.01" y2="6" /><line x1="12" y1="12" x2="12.01" y2="12" /><line x1="18" y1="6" x2="18.01" y2="6" /><line x1="18" y1="12" x2="18.01" y2="12" /></>);
+export const IconCpu = icon(<><rect x="4" y="4" width="16" height="16" rx="2" ry="2" /><rect x="9" y="9" width="6" height="6" rx="1" ry="1" /><path d="M11 4h1M11 18h1M4 11v1M18 11v1" /></>);
+export const IconMemory = icon(<><path d="M19 2H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h2.5" /><rect x="8" y="2" width="8" height="4" rx="1" ry="1" /><path d="M13 8H9v6l3-3 3 3V8z" /></>);
+export const IconHdd = icon(<><rect x="2" y="9" width="20" height="14" rx="2" ry="2" /><path d="M16 11V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7" /><path d="M6 6h.01" /><path d="M16 16h.01" /></>);
+export const IconNetwork = icon(<><path d="M5 12h14" /><path d="M12 5l7 7-7 7" /><path d="M7 12l5-5" /></>);
+export const IconDocker = icon(<><path d="M7.5 15h9l1.35-3.51c.17-.44.27-.71.27-1.14s-.1-.7-.27-1.14l-1.35-3.51C15.95 4.34 14.49 3 12.83 3H5.17c-1.66 0-3.12 1.34-3.42 3l-1.35 3.51c-.17.44-.27.71-.27 1.14s.1.7.27 1.14l1.35 3.51c.3 1.66 1.76 3 3.42 3z" /><path d="M9 13l2 2 4-4" /><rect x="8" y="7" width="8" height="6" rx="1" ry="1" /></>);

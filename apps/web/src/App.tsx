@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { api, type Me } from './api';
 import { Login } from './pages/Login';
-import { Servers } from './pages/Servers';
+import { Dashboard } from './pages/Dashboard';
 import { Overview } from './pages/Overview';
 import { Reinstall } from './pages/Reinstall';
 import { Files } from './pages/Files';
 import { Apps } from './pages/Apps';
+import { WordPress } from './pages/WordPress';
 import { Activity } from './pages/Activity';
 import { Agents } from './pages/Agents';
 import { Authorize } from './pages/Authorize';
@@ -39,10 +40,10 @@ export function App() {
   if (route === '/agents') return <Shell me={me} onSignedOut={() => setMe(null)} active="agents"><Agents /></Shell>;
   if (route === '/keys') return <Shell me={me} onSignedOut={() => setMe(null)} active="keys"><Keys /></Shell>;
   if (route === '/activity') return <Shell me={me} onSignedOut={() => setMe(null)} active="activity"><Activity /></Shell>;
-  const match = route.match(/^\/servers\/([0-9a-f-]{36})(\/terminal|\/reinstall|\/files|\/apps)?$/);
+  const match = route.match(/^\/servers\/([0-9a-f-]{36})(\/terminal|\/reinstall|\/files|\/apps|\/wordpress)?$/);
   return (
-    <Shell me={me} onSignedOut={() => setMe(null)}>
-      {match ? (match[2] === '/terminal' ? <TerminalPage serverId={match[1]} /> : match[2] === '/reinstall' ? <Reinstall serverId={match[1]} /> : match[2] === '/files' ? <Files serverId={match[1]} path={new URLSearchParams(query).get('p') || '/'} /> : match[2] === '/apps' ? <Apps serverId={match[1]} /> : <Overview serverId={match[1]} />) : <Servers />}
+    <Shell me={me} onSignedOut={() => setMe(null)} dashboard={!match}>
+      {match ? (match[2] === '/terminal' ? <TerminalPage serverId={match[1]} /> : match[2] === '/reinstall' ? <Reinstall serverId={match[1]} /> : match[2] === '/files' ? <Files serverId={match[1]} path={new URLSearchParams(query).get('p') || '/'} /> : match[2] === '/apps' ? <Apps serverId={match[1]} /> : match[2] === '/wordpress' ? <WordPress serverId={match[1]} /> : <Overview serverId={match[1]} />) : <Dashboard />}
     </Shell>
   );
 }

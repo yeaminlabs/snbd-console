@@ -57,7 +57,25 @@ export async function onJobLog(conn: AgentConn, jobId: string, data: string) {
 }
 
 export async function onJobDone(conn: AgentConn, jobId: string, code: number) {
+  const { rows } = await pool.query(`select kind, log from jobs where id = $1 and server_id = $2 and status in ('queued', 'running')`, [jobId, conn.serverId]);
+  const job = rows[0];
   await pool.query(`update jobs set status = $2, finished_at = now() where id = $1 and server_id = $3 and status in ('queued', 'running')`, [jobId, code === 0 ? 'done' : 'failed', conn.serverId]);
+  if (code === 0 && job?.kind === 'install:wordpress') {
+    try {
+      const log = job.log || '';
+      const get = (k: string) => {
+        const m = log.match(new RegExp(k + '=([^\n]+)'));
+        return m ? m[1].trim() : null;
+      };
+      const wpUrl = get('WP_URL') || get('Done');
+      const domain = (log.match(/server_name\s+([^\s;]+)/) || [])[1] || (wpUrl ? new URL(wpUrl.startsWith('http') ? wpUrl : 'http://' + wpUrl).hostname : null);
+      if (domain) {
+        const adminUrl = wpUrl ? wpUrl.replace(/\/$/, '') + '/wp-admin/' : `http://${domain}/wp-admin/`;
+        await pool.query(`insert into wordpress_sites (server_id, domain, path, site_name, admin_user, admin_url) values ($1, $2, $3, $4, $5, $6) on conflict (server_id, domain) do update set admin_url = excluded.admin_url, updated_at = now()`,
+          [conn.serverId, domain, `/var/www/${domain}`, domain, get('WP_ADMIN_USER') || 'admin', adminUrl]);
+      }
+    } catch {}
+  }
 }
 
 /** An agent that drops kills its running jobs, so they cannot be left "running" forever. */

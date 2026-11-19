@@ -1,27 +1,44 @@
 import { useState, type ReactNode } from 'react';
 import { api, type Me } from '../api';
-import { IconBot, IconActivity, IconBackup, IconKey, IconReceipt, IconServers, IconSupport } from './Icons';
+import { IconServers, IconReport, IconBackup, IconNotifications, IconFinance, IconSettings, IconHelp, IconBot, IconActivity, IconKey } from './Icons';
 import snbdLogo from '../assets/logo_1000.png';
 
-const soon = (label: string, icon: ReactNode) => (
-  <span className="nav-item disabled" aria-disabled="true" title={`${label} — coming soon`}>{icon}<span className="nav-label">{label}</span><span className="soon">Soon</span></span>
-);
+type NavItem = { id: string; label: string; icon: ReactNode; href: string; badge?: boolean };
 
-export function Shell({ me, onSignedOut, children, active = 'servers' }: { me: Me; onSignedOut: () => void; children: ReactNode; active?: 'servers' | 'keys' | 'activity' | 'agents' }) {
+const NAV: NavItem[] = [
+  { id: 'servers', label: 'Servers', icon: <IconServers />, href: '#/' },
+  { id: 'keys', label: 'SSH keys', icon: <IconKey />, href: '#/keys' },
+  { id: 'agents', label: 'MCP server', icon: <IconBot />, href: '#/agents' },
+  { id: 'activity', label: 'Activity', icon: <IconActivity />, href: '#/activity' },
+];
+
+const ACCOUNT: { id: string; label: string; icon: ReactNode; href: string }[] = [
+  { id: 'settings', label: 'Settings', icon: <IconSettings />, href: '#/settings' },
+  { id: 'help', label: 'Help', icon: <IconHelp />, href: '#/help' },
+];
+
+export function Shell({ me, onSignedOut, children, active = 'servers', dashboard = false }: { me: Me; onSignedOut: () => void; children: ReactNode; active?: string; dashboard?: boolean }) {
   const [collapsed, setCollapsed] = useState(false);
-  
+
+  const navItems = [
+    ...NAV,
+    { id: 'reports', label: 'Reports', icon: <IconReport />, href: '#' },
+    { id: 'backups', label: 'Backups', icon: <IconBackup />, href: '#' },
+    { id: 'notifications', label: 'Notifications', icon: <IconNotifications />, href: '#', badge: true },
+    { id: 'finances', label: 'Finances', icon: <IconFinance />, href: '#' },
+  ];
+
   return (
     <>
-      <header className="top">
-        <button 
-          className="nav-toggle" 
+      <header className={`top ${dashboard ? 'dashboard-top' : ''}`}>
+        <button
+          className="nav-toggle"
           onClick={() => setCollapsed(!collapsed)}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          style={{ transition: 'all 0.2s ease' }}
         >
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ transition: 'transform 0.2s ease', transform: collapsed ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-            <polyline points="11 4 6 9 11 14"></polyline>
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transition: 'transform 0.2s ease', transform: collapsed ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+            <polyline points="11 4 6 9 11 14" />
           </svg>
         </button>
         <a href="#/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', padding: collapsed ? '0 6px' : '0 4px' }}>
@@ -38,22 +55,44 @@ export function Shell({ me, onSignedOut, children, active = 'servers' }: { me: M
         </div>
         <button className="btn" onClick={() => api.logout().then(onSignedOut)}>{collapsed ? '←' : 'Sign out'}</button>
       </header>
-      <div className={`layout ${collapsed ? 'collapsed' : ''}`}>
+      <div className={`layout ${collapsed ? 'collapsed' : ''} ${dashboard ? 'dashboard-layout' : ''}`}>
         <nav className="side" aria-label="Main">
-          <a href="#/" className={`nav-item ${active === 'servers' ? 'on' : ''}`} aria-current={active === 'servers' ? 'page' : undefined} title="Servers"><IconServers /><span className="nav-label">Servers</span></a>
-          <a href="#/keys" className={`nav-item ${active === 'keys' ? 'on' : ''}`} aria-current={active === 'keys' ? 'page' : undefined} title="SSH keys"><IconKey /><span className="nav-label">SSH keys</span></a>
-          {soon('Backups', <IconBackup />)}
-          <a href="#/agents" className={`nav-item ${active === 'agents' ? 'on' : ''}`} aria-current={active === 'agents' ? 'page' : undefined} title="MCP server"><IconBot /><span className="nav-label">MCP server</span></a>
-          <a href="#/activity" className={`nav-item ${active === 'activity' ? 'on' : ''}`} aria-current={active === 'activity' ? 'page' : undefined} title="Activity"><IconActivity /><span className="nav-label">Activity</span></a>
-          {!collapsed && <h6>Account</h6>}
-          {soon('Billing & invoices', <IconReceipt />)}
-          {soon('Support', <IconSupport />)}
+          <div className="sidebar-brand" style={{ padding: collapsed ? '0 8px' : '16px 14px', display: 'flex', alignItems: 'center', gap: 10, marginBottom: collapsed ? 10 : 18 }}>
+            <span className="brand-mark" style={{ background: 'var(--red)', color: '#fff', width: 26, height: 26, borderRadius: 7, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 13 }}>{me.name.slice(0, 1).toUpperCase()}</span>
+            {!collapsed && <span className="brand-name" style={{ fontWeight: 700, fontSize: 16, letterSpacing: '-.02em', color: '#fff' }}>s.host</span>}
+          </div>
+          <div className="nav-section">
+            {navItems.map((item) => {
+              const isActive = item.id === active;
+              const cls = ['nav-item', isActive ? 'on' : '', item.badge ? ' has-badge' : ''].join(' ');
+              return (
+                <a key={item.id} className={cls} href={item.href} style={{ color: isActive ? '#fff' : 'var(--ink-2)', background: isActive ? '#22c55e' : 'transparent' }}>
+                  {item.icon}
+                  {!collapsed && <span className="nav-label">{item.label}</span>}
+                  {item.badge && <span className="nav-badge">!</span>}
+                </a>
+              );
+            })}
+          </div>
+          <div className="nav-section" style={{ marginTop: 10 }}>
+            {ACCOUNT.map((item) => (
+              <a key={item.id} className="nav-item" href={item.href} style={{ color: 'var(--ink-2)', background: 'transparent' }}>
+                {item.icon}
+                {!collapsed && <span className="nav-label">{item.label}</span>}
+              </a>
+            ))}
+          </div>
+          <div className="sidebar-spacer" />
           {!collapsed && (
-            <div className="side-promo">
-              <div className="side-promo-eyebrow">MCP server</div>
-              <div className="side-promo-title">Your assistant, your servers.</div>
-              <p>Claude Code or OpenCode can check status, read logs and restart services. Full access, every action logged.</p>
-              <a href="#/agents" className="side-promo-link">Connect an AI client →</a>
+            <div className="sidebar-account">
+              <button className="sidebar-account-btn" onClick={() => {}} aria-label="Account">
+                <img src={snbdLogo} alt="" className="sidebar-account-avatar" style={{ width: 30, height: 30, borderRadius: 8, objectFit: 'cover', border: '1px solid var(--line)' }} />
+                <div className="sidebar-account-info">
+                  <div className="sidebar-account-name">{me.name}</div>
+                  <div className="sidebar-account-email">{me.email}</div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--muted)', flexShrink: 0, marginLeft: 6 }}><path d="M6 9l6 6 6-6" /></svg>
+              </button>
             </div>
           )}
         </nav>

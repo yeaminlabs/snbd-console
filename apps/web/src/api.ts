@@ -77,6 +77,8 @@ async function json<T>(res: Response): Promise<T> {
 const post = (url: string, data: unknown) =>
   fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data) });
 
+const del = (url: string) => fetch(url, { method: 'DELETE' });
+
 export const api = {
   me: () => fetch('/api/me').then((r) => (r.status === 401 ? null : json<Me>(r))),
   login: (email: string, password: string) => post('/api/login', { email, password }).then(json<Me>),
@@ -115,4 +117,8 @@ export const api = {
   deleteKey: (id: string) => fetch(`/api/keys/${id}`, { method: 'DELETE' }).then(json<{ ok: true }>),
   installKey: (id: string, serverIds: string[]) => post(`/api/keys/${id}/install`, { serverIds }).then(json<{ ok: true }>),
   uninstallKey: (id: string, serverIds: string[]) => post(`/api/keys/${id}/uninstall`, { serverIds }).then(json<{ ok: true }>),
+  wordpressList: (id: string) => fetch(`/api/servers/${id}/wordpress`).then(json<{ sites: any[] }>),
+  wordpressInstall: (id: string, body: { domain: string; title?: string; adminUser?: string; adminEmail?: string }) => post(`/api/servers/${id}/wordpress`, body).then(json<{ jobId: string }>),
+  wordpressDelete: (id: string, siteId: string) => del(`/api/servers/${id}/wordpress/${siteId}`).then(json<{ ok: boolean }>),
+  wordpressLogin: (id: string, siteId: string) => post(`/api/servers/${id}/wordpress/${siteId}/login`, {}).then(json<{ adminUrl: string }>),
 };

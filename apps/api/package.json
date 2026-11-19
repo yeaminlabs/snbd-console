@@ -9,6 +9,7 @@
     "migrate": "tsx --env-file=../../.env src/migrate.ts",
     "seed": "tsx --env-file=../../.env src/seed.ts",
     "mock-activity": "tsx --env-file=../../.env src/mock-activity.ts",
+    "mock-demo": "tsx --env-file=../../.env src/mock-demo.ts",
     "create-client": "tsx --env-file=../../.env src/create-client.ts",
     "typecheck": "tsc --noEmit"
   },

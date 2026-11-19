@@ -18,6 +18,7 @@ export const APPS: AppDef[] = [
   { id: 'node', name: 'Node.js 22', tag: 'Runtime', desc: 'LTS runtime with npm and corepack.', check: `command -v node && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 22 ]` },
   { id: 'n8n', name: 'n8n', tag: 'Automation', desc: 'Workflow automation in Docker on port 5678 of the VPS, local only. Open it through an SSH tunnel or a reverse proxy.', check: "docker ps -a --format '{{.Names}}' | grep -qx n8n" },
   { id: 'ollama', name: 'Ollama', tag: 'Local models', desc: 'Run open models on this server.', check: 'command -v ollama' },
+  { id: 'wordpress', name: 'WordPress', tag: 'CMS', desc: 'Install WordPress with Nginx, PHP, and MariaDB on a domain of your choice.', check: '[ -f /etc/nginx/sites-enabled/wordpress-* ] || [ -d /var/www/wordpress ] || ls /var/www/*/wp-config.php >/dev/null 2>&1' },
 ];
 
 export const findApp = (id: string) => APPS.find((a) => a.id === id);

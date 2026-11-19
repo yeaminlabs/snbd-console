@@ -3,13 +3,7 @@ import { api, type McpConnection, type McpInfo, type Server, type TokenInfo } fr
 import { Badge } from '../components/Badge';
 import { IconActivity, IconBot, IconFile, IconRestart, IconServers, IconTerminal } from '../components/Icons';
 import { ago } from '../format';
-import opencodeLogo from '../assets/opencode.svg';
-import cursorLogo from '../assets/cursor.svg';
-import clineLogo from '../assets/cline.png';
-import roocodeLogo from '../assets/roocode.png';
-import hermesLogo from '../assets/hermes.png';
-import openclawLogo from '../assets/openclaw.svg';
-import windsurfLogo from '../assets/windsurf.svg';
+import { BRAND_COLORS, BRAND_MARKS, BrandMark } from '../components/ConnectorLogos';
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { month: 'short', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'never');
 
@@ -39,20 +33,28 @@ const Ticker = ({ on }: { on: boolean }) => <span className={`mcp-dot ${on ? 'on
 
 const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
+/** The connector's own logo, shown on its own — no coloured tile behind it.
+ *  Falls back to the first letter of the name when the client is not recognised. */
+function BrandLogo({ c, size = 30, onDark = false }: { c: Pick<McpConnection, 'clientKind' | 'name'>; size?: number; onDark?: boolean }) {
+  const brand = brandForConnection(c);
+  const key = brand?.key;
+  const Mark = key ? BRAND_MARKS[key as keyof typeof BRAND_MARKS] : undefined;
+  if (!Mark || !key) {
+    return <span className="mcp-avatar" aria-hidden="true">{(c.name || '?').slice(0, 1).toUpperCase()}</span>;
+  }
+  return (
+    <span className="mcp-logo" style={{ color: onDark ? '#fff' : BRAND_COLORS[key], width: size, height: size }}>
+      <Mark size={size} />
+    </span>
+  );
+}
+
 function ConnectionCard({ c, onDisconnect }: { c: McpConnection; onDisconnect: (c: McpConnection) => void }) {
   const machine = [c.os, c.ip].filter(Boolean).join(' · ');
-  const logo = logoForConnection(c);
   return (
     <article className="mcp-conn" data-kind={c.clientKind}>
       <div className="mcp-conn-top">
-        {logo ? (
-          <span className="mcp-avatar has-logo" aria-hidden="true">
-            <img src={logo} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-            <span className="mcp-avatar-fallback">{(c.name || '?').slice(0, 1).toUpperCase()}</span>
-          </span>
-        ) : (
-          <span className="mcp-avatar" aria-hidden="true">{(c.name || '?').slice(0, 1).toUpperCase()}</span>
-        )}
+        <BrandLogo c={c} />
         <div className="mcp-conn-id">
           <div className="mcp-conn-name">
             {c.name}
@@ -77,55 +79,53 @@ function ConnectionCard({ c, onDisconnect }: { c: McpConnection; onDisconnect: (
   );
 }
 
-const CLAUDE_LOGO = 'https://cdn.jsdelivr.net/npm/simple-icons@v11/icons/anthropic.svg';
-const OPENAI_LOGO = 'https://cdn.jsdelivr.net/npm/simple-icons@v11/icons/openai.svg';
-const OPENCODE_LOGO = opencodeLogo;
-const HERMES_LOGO = hermesLogo;
-const OPENCLAW_LOGO = openclawLogo;
-
 const AGENTS = [
-  { id: 'claude-code', name: 'Claude Code', icon: CLAUDE_LOGO, color: '#d97757', desc: 'Anthropic CLI - Best for coding tasks', command: true, useImage: true },
-  { id: 'claude-desktop', name: 'Claude Desktop', icon: CLAUDE_LOGO, color: '#d97757', desc: 'Anthropic desktop app', settings: true, useImage: true },
-  { id: 'codex', name: 'OpenAI Codex CLI', icon: OPENAI_LOGO, color: '#10a37f', desc: 'OpenAI coding agent in terminal', command: true, useImage: true },
-  { id: 'opencode', name: 'OpenCode', icon: OPENCODE_LOGO, color: '#6366f1', desc: 'Open source AI coding agent', config: true, useImage: true },
-  { id: 'cursor', name: 'Cursor', icon: cursorLogo, color: '#0066ff', desc: 'AI-powered code editor', settings: true, useImage: true },
-  { id: 'cline', name: 'Cline', icon: clineLogo, color: '#f59e0b', desc: 'VSCode extension AI agent', settings: true, useImage: true },
-  { id: 'roo-code', name: 'RooCode', icon: roocodeLogo, color: '#8b5cf6', desc: 'Fork of Cline with extra features', settings: true, useImage: true },
-  { id: 'hermes', name: 'Hermes', icon: HERMES_LOGO, color: '#f97316', desc: 'Nous Hermes models', settings: true, useImage: true },
-  { id: 'openclaw', name: 'OpenClaw', icon: OPENCLAW_LOGO, color: '#06b6d4', desc: 'Open source coding agent', settings: true, useImage: true },
-  { id: 'windsurf', name: 'Windsurf', icon: windsurfLogo, color: '#06b6d4', desc: 'Codeium AI IDE', settings: true, useImage: true },
-];
+  { id: 'claude-code', name: 'Claude Code', brand: 'claude', desc: 'Anthropic CLI - Best for coding tasks', command: true },
+  { id: 'claude-desktop', name: 'Claude Desktop', brand: 'claude', desc: 'Anthropic desktop app', settings: true },
+  { id: 'codex', name: 'OpenAI Codex CLI', brand: 'codex', desc: 'OpenAI coding agent in terminal', command: true },
+  { id: 'opencode', name: 'OpenCode', brand: 'opencode', desc: 'Open source AI coding agent', config: true },
+  { id: 'cursor', name: 'Cursor', brand: 'cursor', desc: 'AI-powered code editor', settings: true },
+  { id: 'cline', name: 'Cline', brand: 'cline', desc: 'VSCode extension AI agent', settings: true },
+  { id: 'roo-code', name: 'RooCode', brand: 'roo-code', desc: 'Fork of Cline with extra features', settings: true },
+  { id: 'hermes', name: 'Hermes', brand: 'hermes', desc: 'Nous Hermes models', settings: true },
+  { id: 'openclaw', name: 'OpenClaw', brand: 'openclaw', desc: 'Open source coding agent', settings: true },
+  { id: 'windsurf', name: 'Windsurf', brand: 'windsurf', desc: 'Codeium AI IDE', settings: true },
+].map((a) => ({ ...a, color: BRAND_COLORS[a.brand] ?? 'var(--ink)' }));
 
-/** Logo shown in every active connection card, keyed by backend clientKind. */
-const CLIENT_LOGOS: Record<string, string> = {
-  'claude-code': CLAUDE_LOGO,
-  'claude-desktop': CLAUDE_LOGO,
-  'claude': CLAUDE_LOGO,
-  'codex': OPENAI_LOGO,
-  'opencode': OPENCODE_LOGO,
-  'cursor': cursorLogo,
-  'cline': clineLogo,
-  'roo-code': roocodeLogo,
-  'roocode': roocodeLogo,
-  'hermes': HERMES_LOGO,
-  'openclaw': OPENCLAW_LOGO,
-  'windsurf': windsurfLogo,
+/** Logo shown next to every active connection, keyed by backend clientKind.
+ *  Each mark is a standalone glyph in the brand's own colour, so it renders on the
+ *  card directly — no coloured tile or box behind it. */
+const CLIENT_BRANDS: Record<string, { key: string }> = {
+  'claude-code': { key: 'claude' },
+  'claude-desktop': { key: 'claude' },
+  'claude': { key: 'claude' },
+  'codex': { key: 'codex' },
+  'opencode': { key: 'opencode' },
+  'cursor': { key: 'cursor' },
+  'cline': { key: 'cline' },
+  'roo-code': { key: 'roo-code' },
+  'roocode': { key: 'roo-code' },
+  'hermes': { key: 'hermes' },
+  'openclaw': { key: 'openclaw' },
+  'windsurf': { key: 'windsurf' },
+  'vscode': { key: 'vscode' },
 };
 
-/** Resolve a connector logo from clientKind, falling back to fuzzy name match so "Claude"/"OpenCode" still show a logo when kind is "other". */
-function logoForConnection(c: Pick<McpConnection, 'clientKind' | 'name'>): string | null {
+/** Resolve a connector brand from clientKind, falling back to fuzzy name match so "Claude"/"OpenCode" still show branded logos when kind is "other". */
+function brandForConnection(c: Pick<McpConnection, 'clientKind' | 'name'>): { key: string } | null {
   const kind = (c.clientKind || '').toLowerCase().trim();
-  if (CLIENT_LOGOS[kind]) return CLIENT_LOGOS[kind];
+  if (CLIENT_BRANDS[kind]) return CLIENT_BRANDS[kind];
   const n = (c.name || '').toLowerCase();
-  if (n.includes('claude')) return CLAUDE_LOGO;
-  if (n.includes('opencode')) return OPENCODE_LOGO;
-  if (n.includes('codex') || n.includes('openai')) return OPENAI_LOGO;
-  if (n.includes('cursor')) return cursorLogo;
-  if (n.includes('cline')) return clineLogo;
-  if (n.includes('roo')) return roocodeLogo;
-  if (n.includes('hermes')) return HERMES_LOGO;
-  if (n.includes('claw')) return OPENCLAW_LOGO;
-  if (n.includes('windsurf')) return windsurfLogo;
+  if (n.includes('claude')) return CLIENT_BRANDS['claude'];
+  if (n.includes('opencode')) return CLIENT_BRANDS['opencode'];
+  if (n.includes('codex') || n.includes('openai')) return CLIENT_BRANDS['codex'];
+  if (n.includes('cursor')) return CLIENT_BRANDS['cursor'];
+  if (n.includes('cline')) return CLIENT_BRANDS['cline'];
+  if (n.includes('roo')) return CLIENT_BRANDS['roo-code'];
+  if (n.includes('hermes')) return CLIENT_BRANDS['hermes'];
+  if (n.includes('claw')) return CLIENT_BRANDS['openclaw'];
+  if (n.includes('windsurf')) return CLIENT_BRANDS['windsurf'];
+  if (n.includes('code') && (n.includes('vs') || n.includes('visual studio'))) return CLIENT_BRANDS['vscode'];
   return null;
 }
 
@@ -321,16 +321,13 @@ export function Agents() {
           </div>
           {connected.length > 0 ? (
             <ul className="mcp-live-list">
-              {connected.map((c) => {
-                const logo = logoForConnection(c);
-                return (
+              {connected.map((c) => (
                 <li key={c.id}>
-                  {logo && <img src={logo} alt="" loading="lazy" className="mcp-live-logo" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
+                  <BrandLogo c={c} size={22} onDark />
                   <b>{c.name}</b>
                   <span className="muted">{c.os ?? 'machine unknown'}</span>
                 </li>
-                );
-              })}
+              ))}
             </ul>
           ) : (
             <div className="mcp-live-empty">
@@ -394,11 +391,7 @@ export function Agents() {
                 }
               }}
             >
-              {(agent as any).useImage ? (
-                <img src={agent.icon as string} alt={agent.name} style={{ width: '32px', height: '32px', objectFit: 'contain', borderRadius: '6px', flex: '0 0 32px' }} />
-              ) : (
-                <span style={{ fontSize: '28px', flex: '0 0 28px', lineHeight: 1 }}>{agent.icon}</span>
-              )}
+              <BrandMark brand={agent.brand} size={30} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: '700', fontSize: '15px', color: selectedAgent === agent.id ? agent.color : 'var(--ink)', marginBottom: '2px' }}>{agent.name}</div>
                 <div className="muted" style={{ fontSize: '12px' }}>{agent.desc}</div>
@@ -413,7 +406,7 @@ export function Agents() {
             {selectedAgent === 'claude-code' && (
               <div>
                 <h3 style={{ margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '18px' }}>
-                  <img src={CLAUDE_LOGO} alt="" style={{ width: '24px', height: '24px', objectFit: 'contain', borderRadius: '4px' }} /> Claude Code Setup
+                  <BrandMark brand="claude" size={24} /> Claude Code Setup
                 </h3>
                 <p className="muted" style={{ margin: '0 0 16px' }}>Run this single command in your terminal, then authenticate with <span className="mono">/mcp</span></p>
                 <Snippet code={claudeCmd} label="Copy Command" />
@@ -435,7 +428,7 @@ export function Agents() {
             {selectedAgent === 'opencode' && (
               <div>
                 <h3 style={{ margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '18px' }}>
-                  <img src={OPENCODE_LOGO} alt="" style={{ width: '24px', height: '24px', objectFit: 'contain', borderRadius: '4px' }} /> OpenCode Setup
+                  <BrandMark brand="opencode" size={24} /> OpenCode Setup
                 </h3>
                 <p className="muted" style={{ margin: '0 0 16px' }}>Add this to your <span className="mono">opencode.json</span> file in your project or config directory</p>
                 <Snippet code={opencodeCfg} label="Copy Config" />
@@ -444,11 +437,7 @@ export function Agents() {
             {(selectedAgent === 'cursor' || selectedAgent === 'claude-desktop' || selectedAgent === 'cline' || selectedAgent === 'roo-code' || selectedAgent === 'windsurf' || selectedAgent === 'hermes' || selectedAgent === 'openclaw') && (
               <div>
                 <h3 style={{ margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '18px' }}>
-                  {(AGENTS.find(a => a.id === selectedAgent) as any)?.useImage ? (
-                    <img src={(AGENTS.find(a => a.id === selectedAgent)?.icon) as string} alt="" style={{ width: '24px', height: '24px', objectFit: 'contain', borderRadius: '4px' }} />
-                  ) : (
-                    <span>{AGENTS.find(a => a.id === selectedAgent)?.icon}</span>
-                  )} {AGENTS.find(a => a.id === selectedAgent)?.name} Setup
+                  <BrandMark brand={AGENTS.find(a => a.id === selectedAgent)?.brand ?? ''} size={24} /> {AGENTS.find(a => a.id === selectedAgent)?.name} Setup
                 </h3>
                 <p className="muted" style={{ margin: '0 0 16px' }}>Add to your MCP settings/configuration</p>
                 <Snippet code={genericCfg} label="Copy Config" />

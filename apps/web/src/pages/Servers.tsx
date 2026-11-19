@@ -217,17 +217,39 @@ export function Servers() {
       </div>
       {error && <p className="error">{error}</p>}
       {offlineServers.length > 0 && (
-        <div className="notice" role="status" style={{ marginTop: 12 }}>
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>⚠️ No panel agent found — install it so this panel can manage these servers.</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {offlineServers.map((s) => (
-              <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <span style={{ flex: 1, minWidth: 120 }}>{s.name}</span>
-                <button className="btn" onClick={() => setReconnecting({ id: s.id, name: s.name })}>Show install command</button>
+        <section className="card" role="status" style={{ marginTop: 16, overflow: 'hidden', border: '1px solid #fecaca' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '16px 20px', background: 'linear-gradient(90deg, #fef2f2 0%, transparent 60%)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 10, background: 'var(--info-bg)', color: 'var(--info)', flexShrink: 0 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>Panel agent not connected</div>
+                  <p className="muted" style={{ margin: '4px 0 0', fontSize: 13 }}>
+                    {offlineServers.length === 1 ? 'One server needs the panel agent installed to be managed from here.' : `${offlineServers.length} servers need the panel agent installed to be managed from here.`}
+                  </p>
+                </div>
               </div>
-            ))}
+              <div style={{ display: 'flex', flexDirection: 'column', marginTop: 14 }}>
+                {offlineServers.map((s, i) => (
+                  <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 0', borderTop: i === 0 ? 'none' : '1px solid var(--line)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--info)', boxShadow: '0 0 0 4px var(--info-bg)' }} aria-hidden="true" />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 600 }}>{s.name}</div>
+                        {s.ip && <div className="muted mono" style={{ fontSize: 12 }}>{s.ip}</div>}
+                      </div>
+                    </div>
+                    <button className="btn" onClick={() => setReconnecting({ id: s.id, name: s.name })}>
+                      Install agent
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
+        </section>
       )}
       {connecting && <ConnectModal onClose={() => setConnecting(false)} onCreated={load} />}
       {reconnecting && <ConnectModal onClose={() => setReconnecting(null)} onCreated={load} reconnect={reconnecting} />}
