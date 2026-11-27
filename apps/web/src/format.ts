@@ -8,10 +8,10 @@ export const statusLabel: Record<Server['status'], [string, string]> = {
 };
 
 export function sourceLabel(s: Pick<Server, 'provider' | 'region' | 'managedBy'>): [string, string] {
-  // a WHMCS service is the source that matters: WHMCS owns suspend/terminate for it
+  // Orders from SNBDHost are presented as our VPS product, while WHMCS remains
+  // the lifecycle owner behind the scenes.
   if (s.managedBy === 'whmcs') {
-    const where = s.region || (s.provider === 'hetzner' ? 'Hetzner' : s.provider === 'bdix' ? 'BDIX' : '');
-    return [where ? `WHMCS · ${where}` : 'WHMCS', 'info'];
+    return ['SNBD VPS', 'info'];
   }
   if (s.provider === 'bdix') return [s.region ? `BDIX · ${s.region}` : 'BDIX', 'info'];
   if (s.provider === 'hetzner') return [s.region ? `Hetzner · ${s.region}` : 'Hetzner', 'off'];

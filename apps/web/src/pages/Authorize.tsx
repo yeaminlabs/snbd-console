@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, type OAuthRequestInfo } from '../api';
+import { animateAuthCard, animateShake } from '../motion';
 import snbdLogo from '../assets/logo_1000.png';
 
 export function Authorize({ id }: { id: string }) {
@@ -9,8 +10,11 @@ export function Authorize({ id }: { id: string }) {
   const [only, setOnly] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
   const [fullAccess, setFullAccess] = useState(false);
+  const cardRef = useRef<HTMLElement>(null);
 
   useEffect(() => { api.oauthRequest(id).then(setInfo).catch((e) => setError(e.message)); }, [id]);
+  useEffect(() => animateAuthCard(cardRef.current), [!!info]);
+  useEffect(() => { if (error) animateShake(cardRef.current); }, [error]);
 
   async function finish(allow: boolean) {
     setBusy(true); setError('');
@@ -22,7 +26,7 @@ export function Authorize({ id }: { id: string }) {
 
   return (
     <main style={{ display: 'grid', placeItems: 'center', minHeight: '100vh', padding: 24 }}>
-      <section className="card" style={{ width: '100%', maxWidth: 520, padding: 32 }} aria-labelledby="auth-h">
+      <section ref={cardRef} className="card" style={{ width: '100%', maxWidth: 520, padding: 32 }} aria-labelledby="auth-h">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
           <img src={snbdLogo} alt="SNBD HOST" style={{ height: 80, width: 'auto', display: 'block' }} />
         </div>

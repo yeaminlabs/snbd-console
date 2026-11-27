@@ -13,6 +13,7 @@ import { Authorize } from './pages/Authorize';
 import { Keys } from './pages/Keys';
 import { Shell } from './components/Shell';
 import { TerminalPage } from './pages/TerminalPage';
+import { animatePageEnter, bindInteractiveMotion, observeDynamicAdditions } from './motion';
 
 function useHash() {
   const [hash, setHash] = useState(location.hash.slice(1) || '/');
@@ -32,6 +33,20 @@ export function App() {
   useEffect(() => {
     api.me().then(setMe).catch(() => setMe(null));
   }, []);
+
+  useEffect(() => bindInteractiveMotion(document), []);
+
+  useEffect(() => {
+    if (!me || route === '/authorize') return;
+    const main = document.querySelector<HTMLElement>('main.content');
+    if (!main) return;
+    const stopEnter = animatePageEnter(main);
+    const stopObserve = observeDynamicAdditions(main);
+    return () => {
+      stopEnter();
+      stopObserve();
+    };
+  }, [me, route]);
 
   if (me === undefined) return null;
   if (!me) return <Login onSignedIn={setMe} />;

@@ -1,6 +1,7 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, type Me } from '../api';
 import { IconBot, IconActivity, IconBackup, IconKey, IconReceipt, IconServers, IconSupport } from './Icons';
+import { animateShellMount, animateSidebarToggle } from '../motion';
 import snbdLogo from '../assets/logo_1000.png';
 
 const soon = (label: string, icon: ReactNode) => (
@@ -11,11 +12,25 @@ const soon = (label: string, icon: ReactNode) => (
 
 export function Shell({ me, onSignedOut, children, active = 'servers' }: { me: Me; onSignedOut: () => void; children: ReactNode; active?: 'servers' | 'keys' | 'activity' | 'agents' }) {
   const [collapsed, setCollapsed] = useState(false);
+  const headerRef = useRef<HTMLElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+  const chevronRef = useRef<SVGSVGElement>(null);
+
+  useEffect(() => {
+    return animateShellMount(headerRef.current, navRef.current);
+  }, []);
+
+  const toggle = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    animateSidebarToggle(navRef.current, chevronRef.current, next);
+  };
+
   return (
     <>
-      <header className="top">
-        <button className="nav-toggle" onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ transition: 'transform 0.2s ease', transform: collapsed ? 'rotate(180deg)' : undefined }}><polyline points="11 4 6 9 11 14" /></svg>
+      <header ref={headerRef} className="top">
+        <button className="nav-toggle" onClick={toggle} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+          <svg ref={chevronRef} width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ transition: 'transform 0.2s ease', transform: collapsed ? 'rotate(180deg)' : undefined }}><polyline points="11 4 6 9 11 14" /></svg>
         </button>
         <a href="#/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', padding: collapsed ? '0 6px' : '0 4px' }}><img src={snbdLogo} alt="SNBD HOST" style={{ height: 44, width: 'auto', display: 'block' }} /></a>
         <a href="https://snbdhost.com/eu-vps" target="_blank" rel="noreferrer" className="header-promo" title="Cheapest EU VPS — from $11.97/mo"><span className="header-promo-price">from $11.97/mo</span><span className="header-promo-text">Cheapest EU VPS for your next project idea — build without hassle, do it right with SNBD Host →</span></a>
@@ -24,7 +39,7 @@ export function Shell({ me, onSignedOut, children, active = 'servers' }: { me: M
         <button className="btn" onClick={() => api.logout().then(onSignedOut)}>{collapsed ? '←' : 'Sign out'}</button>
       </header>
       <div className={`layout ${collapsed ? 'collapsed' : ''}`}>
-        <nav className="side" aria-label="Main">
+        <nav ref={navRef} className="side" aria-label="Main">
           <a href="#/" className={`nav-item ${active === 'servers' ? 'on' : ''}`} aria-current={active === 'servers' ? 'page' : undefined}><IconServers /><span className="nav-label">Servers</span></a>
           <a href="#/keys" className={`nav-item ${active === 'keys' ? 'on' : ''}`} aria-current={active === 'keys' ? 'page' : undefined}><IconKey /><span className="nav-label">SSH keys</span></a>
           {soon('Backups', <IconBackup />)}

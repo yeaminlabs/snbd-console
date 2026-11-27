@@ -146,7 +146,7 @@ a.nav-item:hover { background: var(--bg); color: var(--ink); }
 .dash-bandwidth { grid-column: 1 / -1; }
 
 .spark { display: flex; align-items: flex-end; gap: 5px; height: 100%; border-bottom: 1px solid var(--line); padding-bottom: 4px; position: relative; }
-.spark-bar { width: 100%; border-radius: 2px 2px 0 0; transition: height .3s var(--ease); }
+.spark-bar { width: 100%; border-radius: 2px 2px 0 0; transition: height .3s var(--ease); transform-origin: bottom center; }
 .spark-empty { border-radius: 2px; }
 
 .dash-section.dash-activity { background: #fff; border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
@@ -203,7 +203,7 @@ a.nav-item:hover { background: var(--bg); color: var(--ink); }
 .codebox { background: var(--ink); color: #e4e4e7; border-radius: var(--radius-sm); padding: 12px; font-size: 12px; word-break: break-all; }
 .btn-link { margin-top: 12px; background: none; border: 0; padding: 4px 0; color: var(--red-dark); font: 600 14px 'Inter', sans-serif; cursor: pointer; text-decoration: underline; }
 .chart { display: flex; align-items: flex-end; gap: 4px; height: 140px; margin-top: 20px; border-bottom: 1px solid var(--line); position: relative; }
-.chart div { flex: 1; border-radius: 2px 2px 0 0; background: linear-gradient(180deg, #ef3349 0%, var(--red) 100%); transition: height .4s var(--ease), filter .12s var(--ease); }
+.chart div { flex: 1; border-radius: 2px 2px 0 0; background: linear-gradient(180deg, #ef3349 0%, var(--red) 100%); transition: height .4s var(--ease), filter .12s var(--ease); transform-origin: bottom center; }
 .chart div:hover { filter: brightness(1.15); }
 .chart div.gap { background: var(--line); }
 .chart-axis { display: flex; justify-content: space-between; font-size: 12px; margin-top: 4px; }
@@ -310,7 +310,7 @@ a.nav-item:hover { background: var(--bg); color: var(--ink); }
 .ov-stat-value { font-size: 22px; font-weight: 600; letter-spacing: -.02em; margin-top: 8px; line-height: 1.15; }
 .ov-stat-sub { font-size: 12px; margin-top: 1px; }
 .ov-meter { height: 4px; border-radius: 999px; background: var(--line-2); margin-top: 10px; overflow: hidden; }
-.ov-meter-fill { height: 100%; border-radius: 999px; transition: width .5s var(--ease); }
+.ov-meter-fill { height: 100%; border-radius: 999px; transform-origin: left center; transition: width .5s var(--ease); }
 .ov-chart-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
 .ov-now { display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px; border: 1px solid; border-radius: 999px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
 .ov-now-dot { width: 7px; height: 7px; border-radius: 999px; animation: pulse-dot 2s infinite; }
@@ -458,10 +458,8 @@ a.srow:focus-visible { outline: 2px solid var(--red); outline-offset: -2px; }
 .srow:hover .chev { color: var(--muted); transform: translateX(2px); }
 
 /* modal */
-.modal-backdrop { position: fixed; inset: 0; background: rgba(24,24,27,.45); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; animation: fade-in .15s var(--ease); }
-@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-.modal { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-2); width: 100%; max-width: 440px; padding: 24px; animation: modal-in .18s var(--ease); max-height: calc(100vh - 40px); overflow: auto; }
-@keyframes modal-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+.modal-backdrop { position: fixed; inset: 0; background: rgba(24,24,27,.45); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
+.modal { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow-2); width: 100%; max-width: 440px; padding: 24px; max-height: calc(100vh - 40px); overflow: auto; }
 .modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
 .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--radius-sm); border: 0; background: none; color: var(--muted); cursor: pointer; transition: background-color .12s var(--ease); flex: 0 0 auto; }
 .icon-btn:hover { background: var(--bg); color: var(--ink); }

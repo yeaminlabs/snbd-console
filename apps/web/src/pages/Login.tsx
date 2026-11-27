@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api, type Me } from '../api';
+import { animateAuthCard, animateShake } from '../motion';
 import snbdLogo from '../assets/logo_1000.png';
 
 const isDev = import.meta.env.DEV;
@@ -7,6 +8,11 @@ const isDev = import.meta.env.DEV;
 export function Login({ onSignedIn }: { onSignedIn: (m: Me) => void }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    return animateAuthCard(formRef.current);
+  }, []);
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -17,6 +23,7 @@ export function Login({ onSignedIn }: { onSignedIn: (m: Me) => void }) {
       onSignedIn(await api.login(String(f.get('email')), String(f.get('password'))));
     } catch (err) {
       setError((err as Error).message);
+      animateShake(formRef.current);
     } finally {
       setBusy(false);
     }
@@ -30,6 +37,7 @@ export function Login({ onSignedIn }: { onSignedIn: (m: Me) => void }) {
       onSignedIn(await api.login('demo@snbd.test', 'demo-password'));
     } catch (err) {
       setError((err as Error).message);
+      animateShake(formRef.current);
     } finally {
       setBusy(false);
     }
@@ -37,7 +45,7 @@ export function Login({ onSignedIn }: { onSignedIn: (m: Me) => void }) {
 
   return (
     <main style={{ display: 'grid', placeItems: 'center', minHeight: '100vh', padding: 24 }}>
-      <form className="card" style={{ width: '100%', maxWidth: 400, padding: 32 }} onSubmit={submit}>
+      <form ref={formRef} className="card" style={{ width: '100%', maxWidth: 400, padding: 32 }} onSubmit={submit}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 28 }}>
           <img src={snbdLogo} alt="SNBD HOST" style={{ height: 80, width: 'auto', display: 'block' }} />
         </div>
