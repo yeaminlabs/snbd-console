@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { pool } from './db.js';
 import { agents, type AgentConn } from './registry.js';
 
-const JOB_LOG_MAX = 1_000_000;
+const JOB_LOG_MAX = 10_000_000;
+const TRUNCATION_NOTE = '\n[log truncated — output exceeds 10 MB]\n';
 
 export class RpcError extends Error {
   constructor(public status: number, message: string) {
@@ -49,10 +50,16 @@ export function failPending(conn: AgentConn) {
 }
 
 export async function onJobLog(conn: AgentConn, jobId: string, data: string) {
-  // left() keeps the newest-first cap simple: once the cap is hit further output is dropped
+  // once the cap is hit, append a truncation note once and stop accepting further output
   await pool.query(
-    `update jobs set status = 'running', log = case when length(log) < $3 then left(log || $2, $3) else log end where id = $1 and server_id = $4 and status in ('queued', 'running')`,
-    [jobId, data, JOB_LOG_MAX, conn.serverId],
+    `update jobs set status = 'running', log =
+       case
+         when length(log) >= $3 then log
+         when length(log) + length($2) <= $3 then log || $2
+         else left(log || $2, $3) || $4
+       end
+     where id = $1 and server_id = $5 and status in ('queued', 'running')`,
+    [jobId, data, JOB_LOG_MAX, TRUNCATION_NOTE, conn.serverId],
   );
 }
 
@@ -75,6 +82,15 @@ export async function onJobDone(conn: AgentConn, jobId: string, code: number) {
           [conn.serverId, domain, `/var/www/${domain}`, domain, get('WP_ADMIN_USER') || 'admin', adminUrl]);
       }
     } catch {}
+  }
+  // dispatch the next queued job for this server using the stored script
+  const { rows: nextRows } = await pool.query(
+    `select id, script from jobs where server_id = $1 and status = 'queued' order by queued_position asc limit 1`,
+    [conn.serverId],
+  );
+  if (nextRows[0]) {
+    const next = nextRows[0] as { id: string; script: string };
+    if (next.script) conn.socket.send(JSON.stringify({ type: 'job.start', jobId: next.id, script: next.script }));
   }
 }
 

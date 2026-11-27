@@ -1,0 +1,14 @@
+services:
+  snbd-portainer:
+    image: portainer/portainer-ce:latest
+    container_name: snbd-portainer
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${PORTAINER_PORT}:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - snbd-portainer-data:/data
+
+volumes:
+  snbd-portainer-data:
+    name: snbd-portainer-data

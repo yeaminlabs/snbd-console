@@ -1,0 +1,16 @@
+{
+  "id": "ollama",
+  "name": "Ollama",
+  "tag": "Local models",
+  "desc": "Run open-source AI models locally on this server. Accessible via SSH tunnel.",
+  "version": "latest",
+  "type": "compose",
+  "installDir": "/opt/snbd/apps/ollama",
+  "check": "docker compose -f /opt/snbd/apps/ollama/docker-compose.yml ps --format json 2>/dev/null | grep -q 'running'",
+  "postInstall": {
+    "note": "Ollama is running on port ${OLLAMA_PORT} (localhost only). Access it with: ssh -L ${OLLAMA_PORT}:127.0.0.1:${OLLAMA_PORT} root@<server-ip>  then run: ollama pull llama3.2"
+  },
+  "form": [
+    { "key": "OLLAMA_PORT", "label": "API port", "type": "number", "default": "11434", "required": true }
+  ]
+}

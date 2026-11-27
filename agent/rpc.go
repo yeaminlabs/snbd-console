@@ -26,6 +26,7 @@ type rpcArgs struct {
 	User      string `json:"user"`
 	Password  string `json:"password"`
 	Key       string `json:"key"`
+	Container string `json:"container"`
 }
 
 // handleRPC runs one panel request and always answers, success or failure.
@@ -64,6 +65,12 @@ func handleRPC(m inbound, send func(any) error) {
 		data, err = sshAddKey(a.User, a.Key)
 	case "ssh.removekey":
 		data, err = sshRemoveKey(a.User, a.Key)
+	case "container.ls":
+		data, err = containerLs(a.Container, a.Path)
+	case "container.read":
+		data, err = containerRead(a.Container, a.Path)
+	case "container.write":
+		data, err = containerWrite(a.Container, a.Path, a.Data)
 	default:
 		err = errors.New("unknown operation")
 	}

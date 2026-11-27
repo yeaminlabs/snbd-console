@@ -22,6 +22,7 @@ COPY --from=build /app/apps/api apps/api
 COPY --from=build /app/apps/web/dist apps/web/dist
 COPY scripts/apps scripts/apps
 COPY scripts/install.sh scripts/install.sh
+COPY manifests manifests
 # the signed agent files are mounted at /app/dist/releases (read-only) by compose
 USER node
 WORKDIR /app/apps/api

@@ -1,0 +1,19 @@
+services:
+  snbd-jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: snbd-jellyfin
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${JELLYFIN_PORT}:8096"
+    volumes:
+      - snbd-jellyfin-config:/config
+      - snbd-jellyfin-cache:/cache
+      - snbd-jellyfin-media:/media
+
+volumes:
+  snbd-jellyfin-config:
+    name: snbd-jellyfin-config
+  snbd-jellyfin-cache:
+    name: snbd-jellyfin-cache
+  snbd-jellyfin-media:
+    name: snbd-jellyfin-media

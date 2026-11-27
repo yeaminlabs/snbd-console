@@ -11,6 +11,14 @@ export const AgentHeartbeat = z.object({
   diskUsed: z.number(),
   diskTotal: z.number(),
   uptime: z.number(),
+  // extended metrics (optional so older agents stay compatible)
+  load1: z.number().optional(),
+  load5: z.number().optional(),
+  load15: z.number().optional(),
+  swapUsed: z.number().optional(),
+  swapTotal: z.number().optional(),
+  netIn: z.number().optional(),   // cumulative bytes received (all interfaces)
+  netOut: z.number().optional(),  // cumulative bytes sent (all interfaces)
 });
 // data is base64 of raw pty bytes
 export const AgentTermOut = z.object({ type: z.literal('term.out'), sid: z.string(), data: z.string() });

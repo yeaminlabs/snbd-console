@@ -1,0 +1,18 @@
+{
+  "id": "vaultwarden",
+  "name": "Vaultwarden",
+  "tag": "Security",
+  "desc": "Unofficial Bitwarden-compatible password manager server. Works with all Bitwarden clients.",
+  "version": "latest",
+  "type": "compose",
+  "installDir": "/opt/snbd/apps/vaultwarden",
+  "containerName": "snbd-vaultwarden",
+  "check": "docker ps --format '{{.Names}}' | grep -qx snbd-vaultwarden",
+  "postInstall": {
+    "note": "Vaultwarden is running at http://127.0.0.1:${VW_PORT}. Use a reverse proxy with HTTPS for production. Connect your Bitwarden app to this server URL."
+  },
+  "form": [
+    { "key": "VW_PORT", "label": "HTTP port", "type": "number", "default": "8083", "required": true },
+    { "key": "VW_SIGNUPS", "label": "Allow signups", "type": "text", "default": "true", "required": false, "hint": "Set to false after creating your account to prevent others from registering." }
+  ]
+}

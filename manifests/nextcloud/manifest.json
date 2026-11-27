@@ -1,0 +1,17 @@
+{
+  "id": "nextcloud",
+  "name": "Nextcloud",
+  "tag": "Storage",
+  "desc": "Self-hosted file sync, sharing, and collaboration platform (like Google Drive).",
+  "version": "latest",
+  "type": "compose",
+  "installDir": "/opt/snbd/apps/nextcloud",
+  "containerName": "snbd-nextcloud",
+  "check": "docker ps --format '{{.Names}}' | grep -qx snbd-nextcloud",
+  "postInstall": {
+    "note": "Nextcloud is running at http://127.0.0.1:${NEXTCLOUD_PORT} (use SSH tunnel or open port). Complete the setup wizard to create an admin account."
+  },
+  "form": [
+    { "key": "NEXTCLOUD_PORT", "label": "HTTP port", "type": "number", "default": "8082", "required": true }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "filebrowser",
+  "name": "File Browser",
+  "tag": "Tools",
+  "desc": "Web-based file manager for browsing, uploading, and editing files on your VPS.",
+  "version": "latest",
+  "type": "compose",
+  "installDir": "/opt/snbd/apps/filebrowser",
+  "containerName": "snbd-filebrowser",
+  "check": "docker ps --format '{{.Names}}' | grep -qx snbd-filebrowser",
+  "postInstall": {
+    "note": "File Browser is running at http://127.0.0.1:${FB_PORT} (use SSH tunnel or open port). Default login: admin / admin — change it immediately."
+  },
+  "form": [
+    { "key": "FB_PORT", "label": "HTTP port", "type": "number", "default": "8084", "required": true }
+  ]
+}

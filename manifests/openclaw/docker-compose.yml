@@ -1,0 +1,22 @@
+services:
+  snbd-openclaw:
+    image: node:22-alpine
+    container_name: snbd-openclaw
+    restart: unless-stopped
+    working_dir: /workspace
+    volumes:
+      - snbd-openclaw-workspace:/workspace
+    environment:
+      - NPM_CONFIG_PREFIX=/workspace/.npm-global
+      - SHARP_IGNORE_GLOBAL_LIBVIPS=1
+    command:
+      - sh
+      - -c
+      - |
+        export PATH=/workspace/.npm-global/bin:$$PATH
+        command -v openclaw 2>/dev/null || npm install -g openclaw@latest
+        exec tail -f /dev/null
+
+volumes:
+  snbd-openclaw-workspace:
+    name: snbd-openclaw-workspace

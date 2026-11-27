@@ -1,0 +1,13 @@
+services:
+  snbd-uptime-kuma:
+    image: louislam/uptime-kuma:latest
+    container_name: snbd-uptime-kuma
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${KUMA_PORT}:3001"
+    volumes:
+      - snbd-kuma-data:/app/data
+
+volumes:
+  snbd-kuma-data:
+    name: snbd-kuma-data

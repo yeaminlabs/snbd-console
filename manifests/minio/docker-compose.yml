@@ -1,0 +1,18 @@
+services:
+  snbd-minio:
+    image: minio/minio:latest
+    container_name: snbd-minio
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MINIO_API_PORT}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT}:9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
+    volumes:
+      - snbd-minio-data:/data
+
+volumes:
+  snbd-minio-data:
+    name: snbd-minio-data
